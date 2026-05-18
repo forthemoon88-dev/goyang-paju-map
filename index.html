@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>고양·파주 도시계획 지도</title>
+<script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCjJccnRPgwiPZDGPhV3QsORfHFYLuQalU&language=ko"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap');
+:root {
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3248;
+  --accent:#4ade80;--text:#e8eaf0;--text2:#8b90a8;--text3:#555a72;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* 헤더 */
+header{display:flex;align-items:center;gap:12px;padding:0 16px;height:50px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;z-index:100;}
+.logo{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;}.logo span{color:var(--accent);}
+.header-search{flex:1;max-width:320px;position:relative;}
+.header-search input{width:100%;padding:6px 12px 6px 32px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;outline:none;}
+.header-search input:focus{border-color:var(--accent);}
+.search-ico{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;}
+.header-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.loading-bar{font-size:12px;color:var(--text3);display:flex;align-items:center;gap:6px;}
+.spin{width:14px;height:14px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn{padding:5px 12px;border-radius:7px;font-size:12px;font-family:inherit;font-weight:500;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);transition:all .15s;}
+.btn:hover{background:var(--surface2);color:var(--text);}
+.btn-primary{background:var(--accent);color:#0f1117;border-color:var(--accent);}
+.btn-primary:hover{background:#22c55e;}
+
+/* 메인 */
+.main{display:flex;flex:1;overflow:hidden;}
+
+/* 사이드바 */
+.sidebar{width:280px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.filter-row{display:flex;gap:5px;padding:8px 10px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.chip{padding:3px 9px;border-radius:99px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid var(--border);color:var(--text2);background:transparent;font-family:inherit;transition:all .15s;}
+.chip:hover{border-color:var(--text3);}
+.chip.active-all{background:var(--accent);color:#0f1117;border-color:var(--accent);}
+.chip.active-road{background:#60a5fa;color:#0f1117;border-color:#60a5fa;}
+.chip.active-rail{background:#f472b6;color:#fff;border-color:#f472b6;}
+.chip.active-dev{background:#a78bfa;color:#fff;border-color:#a78bfa;}
+.chip.active-park{background:#34d399;color:#0f1117;border-color:#34d399;}
+.chip.active-infra{background:#f59e0b;color:#0f1117;border-color:#f59e0b;}
+.chip.active-env{background:#22d3ee;color:#0f1117;border-color:#22d3ee;}
+.region-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.rtab{flex:1;padding:7px;font-size:12px;text-align:center;cursor:pointer;color:var(--text3);border-bottom:2px solid transparent;font-family:inherit;background:transparent;transition:all .15s;}
+.rtab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border);flex-shrink:0;}
+.stat{padding:6px;text-align:center;border-right:1px solid var(--border);}
+.stat:last-child{border-right:none;}
+.stat-n{font-size:15px;font-weight:700;}
+.stat-l{font-size:10px;color:var(--text3);}
+
+/* 도로 레이어 토글 */
+.road-toggle{padding:6px 10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;flex-shrink:0;}
+.road-toggle span{font-size:11px;color:var(--text2);}
+.toggle-btn{padding:2px 8px;font-size:11px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit;}
+.toggle-btn.on{background:#22d3ee22;color:#22d3ee;border-color:#22d3ee;}
+
+.project-list{overflow-y:auto;flex:1;}
+.project-list::-webkit-scrollbar{width:4px;}
+.project-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+/* 폴더 그룹 */
+.group-header{display:flex;align-items:center;gap:7px;padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--border);background:var(--surface2);user-select:none;}
+.group-header:hover{background:#2a2f45;}
+.g-arrow{font-size:11px;color:var(--text3);transition:transform .2s;}
+.g-arrow.open{transform:rotate(90deg);}
+.g-dot{width:9px;height:9px;border-radius:2px;flex-shrink:0;}
+.g-name{font-size:12px;font-weight:500;color:var(--text);flex:1;}
+.g-count{font-size:10px;color:var(--text3);background:var(--surface);padding:1px 5px;border-radius:99px;border:1px solid var(--border);}
+.g-eye{font-size:12px;color:var(--text3);padding:2px 4px;border-radius:4px;cursor:pointer;}
+.g-eye:hover{color:var(--accent);}
+.g-items{display:none;}
+.g-items.open{display:block;}
+
+.proj-item{padding:8px 10px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;}
+.proj-item:hover,.proj-item.active{background:var(--surface2);}
+.proj-item.active{border-left:2px solid var(--accent);}
+.proj-head{display:flex;align-items:flex-start;gap:6px;margin-bottom:3px;}
+.cat-dot{width:7px;height:7px;border-radius:50%;margin-top:4px;flex-shrink:0;}
+.proj-name{font-size:12px;font-weight:500;color:var(--text);line-height:1.4;flex:1;}
+.proj-meta{display:flex;gap:7px;font-size:11px;color:var(--text3);margin-left:13px;}
+.s-dot{display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:2px;vertical-align:middle;}
+
+/* 지도 영역 */
+.map-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;}
+#gmap{flex:1;background:#1a2035;}
+.map-legend{position:absolute;top:10px;right:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 10px;font-size:11px;z-index:20;min-width:140px;max-height:60vh;overflow-y:auto;}
+.legend-title{font-weight:500;color:var(--text2);margin-bottom:5px;font-size:10px;letter-spacing:.05em;text-transform:uppercase;}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px;color:var(--text2);}
+.l-box{width:12px;height:8px;border-radius:2px;flex-shrink:0;}
+.l-sep{border:none;border-top:1px solid var(--border);margin:5px 0;}
+.l-status{display:flex;align-items:center;gap:5px;margin-bottom:2px;color:var(--text3);font-size:10px;}
+.l-dot{width:5px;height:5px;border-radius:50%;}
+
+/* 도로 범례 */
+.road-legend{margin-top:5px;}
+.road-legend .legend-title{color:#22d3ee;}
+
+/* 하단 상세 */
+.detail-panel{height:185px;flex-shrink:0;border-top:1px solid var(--border);background:var(--surface);padding:12px 15px;overflow-y:auto;}
+.detail-panel::-webkit-scrollbar{width:4px;}
+.detail-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+.d-title{font-size:14px;font-weight:500;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.d-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:8px;}
+.df-label{font-size:10px;color:var(--text3);margin-bottom:1px;}
+.df-val{font-size:12px;color:var(--text);font-weight:500;}
+.d-desc{font-size:12px;color:var(--text2);line-height:1.7;}
+.d-empty{display:flex;align-items:center;color:var(--text3);font-size:13px;height:100%;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">고양·파주 <span>도시계획</span></div>
+  <div class="header-search">
+    <span class="search-ico">🔍</span>
+    <input type="text" id="searchInput" placeholder="사업명 검색..." oninput="searchProjects(this.value)">
+  </div>
+  <div class="header-right">
+    <div class="loading-bar" id="loadingBar"><div class="spin"></div><span id="loadingText">데이터 로딩 중...</span></div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="filter-row" id="filterChips">
+      <button class="chip active-all" data-cat="all" onclick="filterCat('all')">전체</button>
+      <button class="chip" data-cat="road" onclick="filterCat('road')">🛣 도로</button>
+      <button class="chip" data-cat="rail" onclick="filterCat('rail')">🚆 철도</button>
+      <button class="chip" data-cat="dev" onclick="filterCat('dev')">🏗 개발</button>
+      <button class="chip" data-cat="park" onclick="filterCat('park')">🌳 공원</button>
+      <button class="chip" data-cat="infra" onclick="filterCat('infra')">⚙ 기반</button>
+      <button class="chip" data-cat="env" onclick="filterCat('env')">🌿 환경</button>
+    </div>
+    <div class="region-tabs">
+      <button class="rtab active" data-r="all" onclick="filterRegion('all')">전체</button>
+      <button class="rtab" data-r="goyang" onclick="filterRegion('goyang')">고양시</button>
+      <button class="rtab" data-r="paju" onclick="filterRegion('paju')">파주시</button>
+    </div>
+    <div class="road-toggle">
+      <span>🛣 도시계획도로 레이어</span>
+      <button class="toggle-btn" id="roadToggleBtn" onclick="toggleRoadLayer()">OFF</button>
+      <select id="roadGradeFilter" onchange="filterRoadGrade(this.value)" style="font-size:11px;background:var(--surface2);border:1px solid var(--border);color:var(--text2);border-radius:5px;padding:2px 5px;font-family:inherit;">
+        <option value="all">전체</option>
+        <option value="광로">광로</option>
+        <option value="대로">대로</option>
+        <option value="중로">중로</option>
+        <option value="소로">소로</option>
+      </select>
+    </div>
+    <div class="stats" id="statsBar"></div>
+    <div class="project-list" id="projectList"></div>
+  </div>
+
+  <div class="map-wrap">
+    <div id="gmap"></div>
+    <div class="map-legend" id="mapLegend">
+      <div class="legend-title">KMZ 레이어</div>
+      <div id="legendItems"></div>
+      <hr class="l-sep">
+      <div class="road-legend" id="roadLegendSection" style="display:none">
+        <div class="legend-title">도시계획도로</div>
+        <div class="legend-item"><div class="l-box" style="background:#ef4444"></div>광로</div>
+        <div class="legend-item"><div class="l-box" style="background:#f97316"></div>대로</div>
+        <div class="legend-item"><div class="l-box" style="background:#facc15"></div>중로</div>
+        <div class="legend-item"><div class="l-box" style="background:#86efac"></div>소로</div>
+        <hr class="l-sep">
+      </div>
+      <div class="l-status"><div class="l-dot" style="background:#f59e0b"></div>계획</div>
+      <div class="l-status"><div class="l-dot" style="background:#4ade80"></div>진행중</div>
+      <div class="l-status"><div class="l-dot" style="background:#60a5fa"></div>완료</div>
+    </div>
+    <div class="detail-panel" id="detailPanel">
+      <div class="d-empty">← 왼쪽 목록에서 사업을 선택하세요</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CAT_COLOR  = {road:'#60a5fa',rail:'#f472b6',dev:'#a78bfa',park:'#34d399',infra:'#f59e0b',env:'#22d3ee'};
+const CAT_LABEL  = {road:'도로',rail:'철도',dev:'개발',park:'공원',infra:'기반시설',env:'환경',all:'전체'};
+const STATUS_COLOR = {plan:'#f59e0b',ongoing:'#4ade80',complete:'#60a5fa'};
+const STATUS_LABEL = {plan:'계획',ongoing:'진행중',complete:'완료'};
+const ROAD_COLOR   = {광로:'#ef4444',대로:'#f97316',중로:'#facc15',소로:'#86efac',도로:'#94a3b8'};
+const ROAD_WEIGHT  = {광로:5,대로:4,중로:3,소로:2,도로:2};
+
+let map, config = {}, projects = [], roadData = [];
+let overlays = [], roadOverlays = [];
+let activeCat='all', activeRegion='all', activeId=null;
+let roadLayerOn=false, activeRoadGrade='all';
+let GROUPS = {}, LINE_STYLE = {};
+let groupOpen = {}, groupVisible = {};
+
+/* ── 데이터 로드 ── */
+async function loadAll(){
+  try {
+    setLoading('설정 로딩...');
+    const [cfgRes, projRes] = await Promise.all([
+      fetch('./data/config.json'),
+      fetch('./data/projects.json')
+    ]);
+    config   = await cfgRes.json();
+    projects = await projRes.json();
+    LINE_STYLE = config.lineStyles || {};
+    GROUPS     = config.groups || {};
+    Object.keys(GROUPS).forEach(k=>{ groupOpen[k]=true; groupVisible[k]=true; });
+    buildLegend();
+    setLoading('');
+    renderStats(); renderList();
+    initMap();
+  } catch(e){
+    setLoading('⚠ 로딩 오류: ' + e.message);
+  }
+}
+
+async function loadRoadData(){
+  setLoading('도로 데이터 로딩...');
+  try {
+    const res = await fetch('./data/roads.json');
+    roadData = await res.json();
+    setLoading('');
+    renderRoadOverlays();
+  } catch(e){
+    setLoading('⚠ 도로 데이터 로드 실패');
+  }
+}
+
+function setLoading(msg){
+  const bar = document.getElementById('loadingBar');
+  const txt = document.getElementById('loadingText');
+  bar.style.display = msg ? 'flex' : 'none';
+  if(txt) txt.textContent = msg;
+}
+
+/* ── 구글맵 초기화 ── */
+function initMap(){
+  map = new google.maps.Map(document.getElementById('gmap'), {
+    center:{lat:37.720,lng:126.840}, zoom:11,
+    mapTypeId:'hybrid',
+    mapTypeControl:true,
+    mapTypeControlOptions:{
+      style:google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+      position:google.maps.ControlPosition.TOP_LEFT,
+      mapTypeIds:['roadmap','hybrid','satellite']
+    },
+    fullscreenControl:false, streetViewControl:true
+  });
+  renderMapOverlays();
+}
+
+/* ── 범례 빌드 ── */
+function buildLegend(){
+  const items = document.getElementById('legendItems');
+  items.innerHTML = Object.entries(GROUPS).map(([k,g])=>`
+    <div class="legend-item">
+      <div class="l-box" style="background:${g.color};opacity:.7"></div>
+      <span>${g.label}</span>
+    </div>`).join('');
+}
+
+/* ── 필터 ── */
+function filtered(){
+  return projects.filter(p=>
+    (activeCat==='all'||p.cat===activeCat)&&
+    (activeRegion==='all'||p.region===activeRegion)
+  );
+}
+
+function renderStats(){
+  const items=filtered();
+  document.getElementById('statsBar').innerHTML=`
+    <div class="stat"><div class="stat-n" style="color:#f59e0b">${items.filter(p=>p.status==='plan').length}</div><div class="stat-l">계획</div></div>
+    <div class="stat"><div class="stat-n" style="color:#4ade80">${items.filter(p=>p.status==='ongoing').length}</div><div class="stat-l">진행중</div></div>
+    <div class="stat"><div class="stat-n" style="color:#60a5fa">${items.filter(p=>p.status==='complete').length}</div><div class="stat-l">완료</div></div>
+    <div class="stat"><div class="stat-n">${items.length}</div><div class="stat-l">전체</div></div>`;
+}
+
+function projColor(p){
+  const ls = LINE_STYLE[p.id] || LINE_STYLE[String(p.id)];
+  return ls?.color || CAT_COLOR[p.cat] || '#888';
+}
+
+/* ── 사이드바 목록 ── */
+function renderList(items){
+  items = items || filtered();
+  const grouped={}, ungrouped=[];
+  items.forEach(p=>{ p.group ? (grouped[p.group]||(grouped[p.group]=[])).push(p) : ungrouped.push(p); });
+
+  let html='';
+  Object.keys(grouped).forEach(key=>{
+    const gItems=grouped[key], gDef=GROUPS[key]||{label:key,color:'#888'};
+    const isOpen=groupOpen[key]!==false, isVis=groupVisible[key]!==false;
+    html+=`
+      <div class="group-header" onclick="toggleGroup('${key}')">
+        <span class="g-arrow ${isOpen?'open':''}">▶</span>
+        <span class="g-dot" style="background:${gDef.color}"></span>
+        <span class="g-name">${gDef.label}</span>
+        <span class="g-count">${gItems.length}</span>
+        <span class="g-eye" onclick="toggleGroupVis('${key}',event)">${isVis?'👁':'🚫'}</span>
+      </div>
+      <div class="g-items ${isOpen?'open':''}">
+        ${gItems.map(p=>`
+          <div class="proj-item${activeId===p.id?' active':''}" onclick="selectProject(${p.id})" style="padding-left:22px">
+            <div class="proj-head">
+              <div class="cat-dot" style="background:${projColor(p)}"></div>
+              <span class="proj-name">${p.name}</span>
+            </div>
+            <div class="proj-meta">
+              <span><span class="s-dot" style="background:${STATUS_COLOR[p.status]}"></span>${STATUS_LABEL[p.status]}</span>
+              <span>${p.year||'-'}</span>
+            </div>
+          </div>`).join('')}
+      </div>`;
+  });
+  ungrouped.forEach(p=>{
+    html+=`
+      <div class="proj-item${activeId===p.id?' active':''}" onclick="selectProject(${p.id})">
+        <div class="proj-head">
+          <div class="cat-dot" style="background:${projColor(p)}"></div>
+          <span class="proj-name">${p.name}</span>
+        </div>
+        <div class="proj-meta">
+          <span><span class="s-dot" style="background:${STATUS_COLOR[p.status]}"></span>${STATUS_LABEL[p.status]}</span>
+          <span>${p.year||'-'}</span>
+          <span>${p.region==='goyang'?'고양시':'파주시'}</span>
+        </div>
+      </div>`;
+  });
+  document.getElementById('projectList').innerHTML = html||'<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">항목 없음</div>';
+}
+
+function toggleGroup(key){ groupOpen[key]=!groupOpen[key]; renderList(); }
+function toggleGroupVis(key,e){
+  e.stopPropagation();
+  groupVisible[key]=!groupVisible[key];
+  renderList(); renderMapOverlays();
+}
+
+/* ── 프로젝트 선택 ── */
+function selectProject(id){
+  activeId=id;
+  const p=projects.find(x=>x.id===id); if(!p) return;
+  const pc=projColor(p);
+  document.getElementById('detailPanel').innerHTML=`
+    <div class="d-title">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${pc};margin-right:4px"></span>
+      ${p.name}
+      <span style="margin-left:auto;display:flex;gap:5px">
+        <button class="btn" style="font-size:11px;padding:3px 9px" onclick="deleteProject(${p.id})">🗑 삭제</button>
+      </span>
+    </div>
+    <div class="d-grid">
+      <div><div class="df-label">지역</div><div class="df-val">${p.region==='goyang'?'고양시':'파주시'}</div></div>
+      <div><div class="df-label">분류</div><div class="df-val">${CAT_LABEL[p.cat]||p.cat}</div></div>
+      <div><div class="df-label">상태</div><div class="df-val" style="color:${STATUS_COLOR[p.status]}">${STATUS_LABEL[p.status]}</div></div>
+      <div><div class="df-label">기간</div><div class="df-val">${p.year||'-'}</div></div>
+      <div><div class="df-label">예산</div><div class="df-val">${p.budget||'-'}</div></div>
+    </div>
+    ${p.desc?`<div class="d-desc">${p.desc}</div>`:''}
+    ${p.source?`<div style="font-size:11px;color:var(--text3);margin-top:5px">출처: ${p.source}</div>`:''}`;
+  renderList(); renderMapOverlays();
+  focusOnMap(p);
+}
+
+function focusOnMap(p){
+  if(!map||!p.coords) return;
+  const parts=p.coords.split(',').map(Number);
+  if(parts.length>=2) map.setCenter({lat:parts[0],lng:parts[1]});
+}
+
+function deleteProject(id){
+  if(!confirm('삭제할까요?')) return;
+  projects=projects.filter(x=>x.id!==id);
+  activeId=null;
+  document.getElementById('detailPanel').innerHTML='<div class="d-empty">← 왼쪽 목록에서 사업을 선택하세요</div>';
+  renderStats(); renderList(); renderMapOverlays();
+}
+
+/* ── 지도 오버레이 ── */
+function renderMapOverlays(){
+  if(!map) return;
+  overlays.forEach(o=>{ if(o.setMap) o.setMap(null); });
+  overlays=[];
+  filtered().forEach(p=>{
+    if(p.group && groupVisible[p.group]===false) return;
+    if(!p.coords) return;
+    const parts=p.coords.split(',').map(Number);
+    const ls=LINE_STYLE[p.id]||LINE_STYLE[String(p.id)]||{};
+    const color=ls.color||CAT_COLOR[p.cat]||'#888';
+    const weight=ls.weight||3;
+    const isActive=activeId===p.id;
+    const isPoly=ls.polygon||p.polygon;
+
+    if(parts.length===2){
+      const mk=new google.maps.Marker({
+        position:{lat:parts[0],lng:parts[1]}, map,
+        icon:{path:google.maps.SymbolPath.CIRCLE,scale:8,fillColor:color,fillOpacity:1,strokeColor:'#fff',strokeWeight:2}
+      });
+      mk.addListener('click',()=>selectProject(p.id));
+      overlays.push(mk);
+    } else if(parts.length>=4){
+      const path=[];
+      for(let i=0;i<parts.length-1;i+=2){
+        if(!isNaN(parts[i])&&!isNaN(parts[i+1])) path.push({lat:parts[i],lng:parts[i+1]});
+      }
+      if(path.length<2) return;
+
+      if(isPoly){
+        const poly=new google.maps.Polygon({
+          paths:path, strokeColor:color,
+          strokeOpacity:isActive?1:.9, strokeWeight:isActive?weight+1:weight,
+          fillColor:ls.fillColor||color, fillOpacity:isActive?.45:(ls.fillOpacity||.25), map
+        });
+        poly.addListener('click',()=>selectProject(p.id));
+        overlays.push(poly);
+      } else {
+        const outline=new google.maps.Polyline({path,strokeColor:'#fff',strokeOpacity:isActive?.9:.3,strokeWeight:weight+3,map});
+        const line=new google.maps.Polyline({path,strokeColor:color,strokeOpacity:isActive?1:.88,strokeWeight:isActive?weight+2:weight,map});
+        line.addListener('click',()=>selectProject(p.id));
+        outline.addListener('click',()=>selectProject(p.id));
+        overlays.push(outline,line);
+      }
+
+      /* 라벨 */
+      const mid=path[Math.floor(path.length/2)];
+      const shortName=p.name.length>14?p.name.slice(0,13)+'…':p.name;
+      const lbl=new google.maps.Marker({
+        position:mid, map,
+        icon:{path:google.maps.SymbolPath.CIRCLE,scale:0},
+        label:{text:shortName,color:'#fff',fontSize:'10px',fontWeight:'700',fontFamily:'Noto Sans KR,sans-serif'},
+        clickable:false
+      });
+      overlays.push(lbl);
+    }
+  });
+}
+
+/* ── 도시계획도로 레이어 ── */
+function toggleRoadLayer(){
+  roadLayerOn=!roadLayerOn;
+  const btn=document.getElementById('roadToggleBtn');
+  btn.textContent=roadLayerOn?'ON':'OFF';
+  btn.className='toggle-btn'+(roadLayerOn?' on':'');
+  document.getElementById('roadLegendSection').style.display=roadLayerOn?'block':'none';
+  if(roadLayerOn && roadData.length===0){
+    loadRoadData();
+  } else {
+    renderRoadOverlays();
+  }
+}
+
+function filterRoadGrade(val){
+  activeRoadGrade=val;
+  if(roadLayerOn) renderRoadOverlays();
+}
+
+function renderRoadOverlays(){
+  roadOverlays.forEach(o=>{ if(o.setMap) o.setMap(null); });
+  roadOverlays=[];
+  if(!map||!roadLayerOn||!roadData.length) return;
+
+  const data = activeRoadGrade==='all' ? roadData : roadData.filter(r=>r.g===activeRoadGrade);
+  data.forEach(r=>{
+    const color=ROAD_COLOR[r.g]||'#94a3b8';
+    const weight=ROAD_WEIGHT[r.g]||2;
+    const path=r.c.map(pt=>({lat:pt[0],lng:pt[1]}));
+    if(path.length<3) return;
+    const poly=new google.maps.Polygon({
+      paths:path, strokeColor:color, strokeOpacity:.7, strokeWeight:1,
+      fillColor:color, fillOpacity:.35, map, clickable:false
+    });
+    roadOverlays.push(poly);
+  });
+}
+
+/* ── 필터 함수들 ── */
+function filterCat(cat){
+  activeCat=cat;
+  document.querySelectorAll('.chip').forEach(c=>{
+    const cc=c.dataset.cat;
+    c.className='chip'+(cc===cat?' active-'+cc:'');
+  });
+  renderStats(); renderList(); renderMapOverlays();
+}
+function filterRegion(r){
+  activeRegion=r;
+  document.querySelectorAll('.rtab').forEach(t=>t.classList.toggle('active',t.dataset.r===r));
+  renderStats(); renderList(); renderMapOverlays();
+}
+function searchProjects(q){
+  const items=q?projects.filter(p=>p.name.includes(q)||p.desc?.includes(q)):filtered();
+  renderList(items);
+}
+
+/* ── 시작 ── */
+loadAll();
+</script>
+</body>
+</html>
