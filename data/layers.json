@@ -1,58 +1,66 @@
 [
   {
-    "id": "김포관산_일산",
+    "id": "gimpo-gwansan",
     "label": "김포관산(일산)",
     "color": "#f97316",
     "type": "dev",
-    "file": "data/kmz/김포관산_일산.json",
+    "file": "data/kmz/gimpo-gwansan.json",
     "visible": true
   },
   {
-    "id": "성장관리방안",
+    "id": "growth-management",
     "label": "성장관리방안 24.1.26",
     "color": "#818cf8",
     "type": "dev",
-    "file": "data/kmz/성장관리방안.json",
+    "file": "data/kmz/growth-management.json",
     "visible": true
   },
   {
-    "id": "서울문산고속도로",
+    "id": "seoul-munsan-highway",
     "label": "서울문산고속도로",
     "color": "#f97316",
     "type": "road",
-    "file": "data/kmz/서울문산고속도로.json",
+    "file": "data/kmz/seoul-munsan-highway.json",
     "visible": true
   },
   {
-    "id": "제2외곽순환",
+    "id": "outer-ring-2",
     "label": "수도권 제2외곽순환",
     "color": "#facc15",
     "type": "road",
-    "file": "data/kmz/제2외곽순환.json",
+    "file": "data/kmz/outer-ring-2.json",
     "visible": true
   },
   {
-    "id": "소규모환경",
+    "id": "small-environment",
     "label": "소규모 환경영향평가",
     "color": "#22d3ee",
     "type": "env",
-    "file": "data/kmz/소규모환경.json",
+    "file": "data/kmz/small-environment.json",
     "visible": true
   },
   {
-    "id": "문화재보호구역",
+    "id": "cultural-heritage",
     "label": "문화재 보호구역",
     "color": "#a78bfa",
     "type": "env",
-    "file": "data/kmz/문화재보호구역.json",
+    "file": "data/kmz/cultural-heritage.json",
     "visible": true
   },
   {
-    "id": "개발도",
+    "id": "development",
     "label": "개발도",
     "color": "#4ade80",
     "type": "dev",
-    "file": "data/kmz/개발도.json",
+    "file": "data/kmz/development.json",
+    "visible": true
+  },
+  {
+    "id": "outer-ring-2-gimpo-paju",
+    "label": "제2외곽순환 김포~파주",
+    "color": "#facc15",
+    "type": "road",
+    "file": "data/kmz/outer-ring-2-gimpo-paju.json",
     "visible": true
   }
 ]
