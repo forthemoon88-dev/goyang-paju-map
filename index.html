@@ -76,8 +76,8 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
 .map-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;}
 #gmap{flex:1;min-height:0;}
 
-/* 범례 — 좌측 하단 */
-.legend{position:absolute;bottom:10px;left:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:11px;z-index:20;max-width:160px;max-height:40vh;overflow-y:auto;}
+/* 범례 — 드래그 가능 */
+.legend{position:absolute;bottom:10px;left:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:11px;z-index:20;max-width:160px;max-height:40vh;overflow-y:auto;cursor:move;user-select:none;}
 .legend::-webkit-scrollbar{width:3px;}
 .legend-h{font-weight:500;color:var(--text2);margin-bottom:6px;font-size:10px;letter-spacing:.05em;text-transform:uppercase;}
 .legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px;color:var(--text2);font-size:11px;}
@@ -100,7 +100,13 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
 .cadastral-btn:hover{background:var(--surface2);color:var(--text);}
 .cadastral-btn.on{background:#4ade8022;color:#4ade80;border-color:#4ade80;}
 
-/* 하단 상세 */
+/* 그리기 도구 */
+.draw-toolbar{position:absolute;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:30;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:6px 10px;}
+.draw-btn{padding:5px 10px;font-size:12px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:4px;}
+.draw-btn:hover{background:var(--surface2);color:var(--text);}
+.draw-btn.active{background:var(--accent);color:#0f1117;border-color:var(--accent);}
+.draw-color-dot{width:10px;height:10px;border-radius:50%;display:inline-block;}
+.my-marker-info{font-size:12px;line-height:1.8;color:#111;min-width:180px;padding:8px 10px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2);}
 .detail{height:0;flex-shrink:0;border-top:0;background:var(--surface);overflow:hidden;transition:height .2s;}
 .detail.show{height:180px;border-top:1px solid var(--border);}
 .detail-inner{padding:12px 16px;height:100%;overflow-y:auto;}
@@ -194,6 +200,16 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
         <div class="legend-h" style="color:#22d3ee">필지 색상</div>
         <div id="parcelLegendItems"></div>
       </div>
+    </div>
+
+    <!-- 그리기 도구 -->
+    <div class="draw-toolbar" id="drawToolbar">
+      <button class="draw-btn" id="btnSelect" onclick="setDrawMode('select')" title="선택/이동">🖱 선택</button>
+      <button class="draw-btn" id="btnMarker" onclick="setDrawMode('marker')" title="마커 찍기">📍 마커</button>
+      <button class="draw-btn" id="btnLine" onclick="setDrawMode('line')" title="선 그리기">📏 선</button>
+      <button class="draw-btn" id="btnPolygon" onclick="setDrawMode('polygon')" title="영역 그리기">⬡ 영역</button>
+      <input type="color" id="drawColor" value="#ef4444" title="색상 선택" style="width:28px;height:28px;padding:2px;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:transparent;">
+      <button class="draw-btn" onclick="clearMyDrawings()" title="내 그리기 전체 삭제" style="color:#f87171;">🗑 삭제</button>
     </div>
 
     <!-- 지적편집도 버튼 -->
@@ -494,9 +510,9 @@ function clearParcelMarkers() {
 async function loadVisibleParcels() {
   if (!map || !parcelOn) return;
   const zoom = map.getLevel();
-  if (zoom > 5) {
+  if (zoom > 4) {
     clearParcelMarkers(); loadedParcelTiles.clear();
-    loading('필지: 줌 13 이상에서 표시'); setTimeout(()=>loading(''), 2000);
+    loading('필지: 더 확대하면 표시됩니다'); setTimeout(()=>loading(''), 2000);
     return;
   }
   const bounds = map.getBounds(); if (!bounds) return;
@@ -506,7 +522,6 @@ async function loadVisibleParcels() {
     for (let ln=Math.floor(sw.lng()/PTILE)*PTILE; ln<=ne.lng()+PTILE; ln=+(ln+PTILE).toFixed(2))
       needed.add(`${la.toFixed(2)}_${ln.toFixed(2)}`);
 
-  // 뷰 벗어난 마커 제거
   parcelMarkers = parcelMarkers.filter(m => {
     if (!needed.has(m._tile)) { m.setMap(null); return false; } return true;
   });
@@ -551,6 +566,151 @@ async function loadVisibleParcels() {
 }
 
 /* ════════════════════════════════
+   그리기 기능
+════════════════════════════════ */
+let drawMode = 'select';
+let myDrawings = [];       // 내 그리기 오버레이
+let drawingPath = [];      // 현재 그리는 중인 좌표
+let drawingOverlay = null; // 임시 라인/폴리곤
+let drawClickListener = null;
+
+function setDrawMode(mode) {
+  drawMode = mode;
+  document.querySelectorAll('.draw-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1));
+  if (btn) btn.classList.add('active');
+
+  // 기존 리스너 제거
+  if (drawClickListener) {
+    kakao.maps.event.removeListener(map, 'click', drawClickListener);
+    drawClickListener = null;
+  }
+  if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
+  drawingPath = [];
+
+  if (mode === 'marker') {
+    map.setCursor('crosshair');
+    drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
+      placeMyMarker(e.latLng);
+    });
+  } else if (mode === 'line') {
+    map.setCursor('crosshair');
+    drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
+      drawingPath.push(e.latLng);
+      if (drawingPath.length >= 2) {
+        if (drawingOverlay) drawingOverlay.setMap(null);
+        drawingOverlay = new kakao.maps.Polyline({
+          path: drawingPath,
+          strokeColor: document.getElementById('drawColor').value,
+          strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
+        });
+        drawingOverlay.setMap(map);
+      }
+    });
+    // 더블클릭으로 완성
+    kakao.maps.event.addListener(map, 'dblclick', e => {
+      if (drawMode !== 'line' || drawingPath.length < 2) return;
+      const line = new kakao.maps.Polyline({
+        path: drawingPath,
+        strokeColor: document.getElementById('drawColor').value,
+        strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
+      });
+      line.setMap(map);
+      line._type = 'drawing';
+      addDrawingClickHandler(line, '선');
+      myDrawings.push(line);
+      if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
+      drawingPath = [];
+    });
+  } else if (mode === 'polygon') {
+    map.setCursor('crosshair');
+    drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
+      drawingPath.push(e.latLng);
+      if (drawingPath.length >= 3) {
+        if (drawingOverlay) drawingOverlay.setMap(null);
+        const color = document.getElementById('drawColor').value;
+        drawingOverlay = new kakao.maps.Polygon({
+          path: drawingPath,
+          strokeColor: color, strokeWeight: 2, strokeOpacity: .9,
+          fillColor: color, fillOpacity: .25
+        });
+        drawingOverlay.setMap(map);
+      }
+    });
+    kakao.maps.event.addListener(map, 'dblclick', e => {
+      if (drawMode !== 'polygon' || drawingPath.length < 3) return;
+      const color = document.getElementById('drawColor').value;
+      const poly = new kakao.maps.Polygon({
+        path: drawingPath,
+        strokeColor: color, strokeWeight: 2, strokeOpacity: .9,
+        fillColor: color, fillOpacity: .25
+      });
+      poly.setMap(map);
+      poly._type = 'drawing';
+      addDrawingClickHandler(poly, '영역');
+      myDrawings.push(poly);
+      if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
+      drawingPath = [];
+    });
+  } else {
+    map.setCursor('');
+  }
+}
+
+function placeMyMarker(latLng) {
+  const color = document.getElementById('drawColor').value;
+  const el = document.createElement('div');
+  el.innerHTML = `<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;background:${color};border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.3);cursor:pointer"></div>`;
+  el.style.cssText = 'transform:translate(-12px,-24px)';
+  const ov = new kakao.maps.CustomOverlay({position:latLng, content:el, zIndex:5});
+  ov.setMap(map);
+  ov._type = 'drawing';
+  el.addEventListener('click', () => showMyDrawingInfo(latLng, '마커', ov));
+  myDrawings.push(ov);
+}
+
+function addDrawingClickHandler(overlay, type) {
+  kakao.maps.event.addListener(overlay, 'click', e => {
+    showMyDrawingInfo(e.latLng, type, overlay);
+  });
+}
+
+let myInfoWin = null;
+function showMyDrawingInfo(pos, type, overlay) {
+  if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; }
+  const el = document.createElement('div');
+  el.className = 'my-marker-info';
+  el.innerHTML = `
+    <b>${type}</b><br>
+    위도: ${pos.getLat().toFixed(5)}<br>
+    경도: ${pos.getLng().toFixed(5)}<br>
+    <div style="display:flex;gap:6px;margin-top:6px">
+      <button onclick="deleteMyDrawing(this)" data-overlay-idx="${myDrawings.indexOf(overlay)}"
+        style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #f87171;background:#fff;color:#f87171;cursor:pointer">삭제</button>
+      <button onclick="this.closest('.kakao-my-iw').remove()"
+        style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer">닫기</button>
+    </div>`;
+  const wrap = document.createElement('div');
+  wrap.className = 'kakao-my-iw';
+  wrap.appendChild(el);
+  myInfoWin = new kakao.maps.CustomOverlay({position:pos, content:wrap, zIndex:10, yAnchor:1.3});
+  myInfoWin.setMap(map);
+}
+
+function deleteMyDrawing(btn) {
+  const idx = parseInt(btn.dataset.overlayIdx);
+  if (myDrawings[idx]) { myDrawings[idx].setMap(null); myDrawings.splice(idx,1); }
+  if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; }
+}
+
+function clearMyDrawings() {
+  if (!confirm('내 그리기를 모두 삭제할까요?')) return;
+  myDrawings.forEach(o => { if(o.setMap) o.setMap(null); });
+  myDrawings = [];
+  if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; }
+}
+
+/* ════════════════════════════════
    지적편집도
 ════════════════════════════════ */
 let cadastralOn = false;
@@ -579,9 +739,36 @@ function loading(msg) {
 }
 
 /* ════════════════════════════════
+   범례 드래그
+════════════════════════════════ */
+function initDraggable(el) {
+  let isDragging = false, startX, startY, startLeft, startTop;
+  el.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    isDragging = true;
+    startX = e.clientX; startY = e.clientY;
+    const rect = el.getBoundingClientRect();
+    startLeft = rect.left; startTop = rect.top;
+    el.style.bottom = 'auto'; el.style.right = 'auto';
+    el.style.left = startLeft + 'px'; el.style.top = startTop + 'px';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    el.style.left = Math.max(0, startLeft + dx) + 'px';
+    el.style.top = Math.max(0, startTop + dy) + 'px';
+  });
+  document.addEventListener('mouseup', () => { isDragging = false; });
+}
+
+/* ════════════════════════════════
    시작
 ════════════════════════════════ */
-window.addEventListener('load', init);
+window.addEventListener('load', () => {
+  init();
+  initDraggable(document.getElementById('mapLegend'));
+});
 </script>
 </body>
 </html>

@@ -101,8 +101,16 @@ textarea{resize:vertical;min-height:80px;}
       <div class="color-row">
         <input type="color" id="colorPicker" value="#60a5fa" oninput="syncColor(this.value)">
         <div class="color-presets">
-          ${['#60a5fa','#f472b6','#4ade80','#f97316','#facc15','#a78bfa','#22d3ee','#f87171','#34d399','#fb923c']
-            .map(c=>`<div class="color-preset" style="background:${c}" onclick="setColor('${c}')" data-color="${c}"></div>`).join('')}
+          <div class="color-preset" style="background:#60a5fa" onclick="setColor('#60a5fa')" data-color="#60a5fa"></div>
+          <div class="color-preset" style="background:#f472b6" onclick="setColor('#f472b6')" data-color="#f472b6"></div>
+          <div class="color-preset" style="background:#4ade80" onclick="setColor('#4ade80')" data-color="#4ade80"></div>
+          <div class="color-preset" style="background:#f97316" onclick="setColor('#f97316')" data-color="#f97316"></div>
+          <div class="color-preset" style="background:#facc15" onclick="setColor('#facc15')" data-color="#facc15"></div>
+          <div class="color-preset" style="background:#a78bfa" onclick="setColor('#a78bfa')" data-color="#a78bfa"></div>
+          <div class="color-preset" style="background:#22d3ee" onclick="setColor('#22d3ee')" data-color="#22d3ee"></div>
+          <div class="color-preset" style="background:#f87171" onclick="setColor('#f87171')" data-color="#f87171"></div>
+          <div class="color-preset" style="background:#34d399" onclick="setColor('#34d399')" data-color="#34d399"></div>
+          <div class="color-preset" style="background:#fb923c" onclick="setColor('#fb923c')" data-color="#fb923c"></div>
         </div>
       </div>
     </div>
