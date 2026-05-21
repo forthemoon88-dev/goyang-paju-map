@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>고양·파주 도시계획 지도</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e7bab8ddea307ac3c4f861f4a2ff00cc&libraries=services"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
@@ -125,6 +126,16 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
       <div class="spin"></div>
       <span id="loadingText">로딩 중...</span>
     </div>
+    <div id="authBtns">
+      <button class="btn" onclick="location.href='login.html'" style="font-size:12px;padding:5px 12px">로그인</button>
+      <button class="btn" onclick="location.href='login.html#signup'" style="font-size:12px;padding:5px 12px;background:var(--accent);color:#0f1117;border-color:var(--accent)">회원가입</button>
+    </div>
+    <div id="userBtns" style="display:none;align-items:center;gap:8px">
+      <span id="userNameBadge" style="font-size:12px;color:var(--text2)"></span>
+      <button class="btn" id="adminBtn" onclick="location.href='admin.html'" style="display:none;font-size:12px;padding:5px 12px">관리자</button>
+      <button class="btn" onclick="location.href='upload.html'" style="font-size:12px;padding:5px 12px">📤 업로드</button>
+      <button class="btn" onclick="doLogout()" style="font-size:12px;padding:5px 12px">로그아웃</button>
+    </div>
   </div>
 </header>
 
@@ -242,33 +253,59 @@ async function init() {
   };
   map = new kakao.maps.Map(container, options);
 
-  // 지도 타입 컨트롤 (일반/스카이뷰)
   const mapTypeControl = new kakao.maps.MapTypeControl();
   map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
-
-  // 줌 컨트롤
   const zoomControl = new kakao.maps.ZoomControl();
   map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
-
-  // 지도 이동 시 필지 업데이트
   kakao.maps.event.addListener(map, 'idle', () => { if(parcelOn) loadVisibleParcels(); });
 
-  // layers.json 로드 (GitHub에 올린 후 동작)
+  // 로그인 상태 확인
+  checkAuthState();
+
+  // layers.json 로드 — 기본값 모두 OFF
   loading('레이어 목록 로딩...');
   try {
     const res = await fetch(GITHUB_RAW + 'data/layers.json');
     layers = await res.json();
-    layers.forEach(l => { layerVisible[l.id] = l.visible !== false; });
+    // 모든 레이어 기본 OFF (클릭해서 켜는 방식)
+    layers.forEach(l => { layerVisible[l.id] = false; });
     renderLayerList();
     buildLegend();
-    for (const l of layers) {
-      if (layerVisible[l.id]) await loadLayer(l);
-    }
   } catch(e) {
     document.getElementById('layerList').innerHTML =
-      '<div style="padding:12px;font-size:12px;color:var(--text3)">GitHub에 파일 업로드 후<br>레이어가 표시됩니다</div>';
+      '<div style="padding:12px;font-size:12px;color:var(--text3)">레이어 목록을 불러올 수 없어요</div>';
   }
   loading('');
+}
+
+/* ════════════════════════════════
+   로그인 상태 확인
+════════════════════════════════ */
+async function checkAuthState() {
+  try {
+    const { createClient } = supabase;
+    const sb = createClient(
+      'https://caldnkfhqeblusscaabs.supabase.co',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbGRua2ZocWVibHVzc2NhYWJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzIzMzUsImV4cCI6MjA5NDkwODMzNX0.z1n5-tqXz5fjy48faxE7nC09zdQKz4_f2mcE6wF8Zls'
+    );
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) {
+      const { data: profile } = await sb.from('profiles').select('name,role').eq('id', session.user.id).single();
+      document.getElementById('authBtns').style.display = 'none';
+      const userBtns = document.getElementById('userBtns');
+      userBtns.style.display = 'flex';
+      document.getElementById('userNameBadge').textContent = profile?.name || session.user.email;
+      if (profile?.role === 'admin') {
+        document.getElementById('adminBtn').style.display = 'inline-block';
+      }
+      window._sb = sb;
+    }
+  } catch(e) { console.log('auth 확인 실패:', e); }
+}
+
+async function doLogout() {
+  if (window._sb) await window._sb.auth.signOut();
+  location.reload();
 }
 
 /* ════════════════════════════════
@@ -363,8 +400,8 @@ function renderLayerList() {
     <div class="layer-item${layerVisible[l.id]?' active':''}" onclick="clickLayer('${l.id}')">
       <div class="layer-dot" style="background:${l.color||'#888'};${!layerVisible[l.id]?'opacity:.3':''}"></div>
       <span class="layer-name" style="${!layerVisible[l.id]?'opacity:.4':''}">${l.label||l.id}</span>
-      ${layerData[l.id]?`<span class="layer-count">${(layerData[l.id].features||[]).length}</span>`:''}
-      <span class="layer-eye" onclick="toggleLayerVisibility('${l.id}',event)">${layerVisible[l.id]?'👁':'🚫'}</span>
+      ${layerData[l.id]?`<span class="layer-count">${(layerData[l.id].features||[]).length}</span>`:'<span class="layer-count" style="color:var(--text3)">OFF</span>'}
+      <span class="layer-eye" onclick="toggleLayerVisibility('${l.id}',event)">${layerVisible[l.id]?'👁':'○'}</span>
     </div>`).join('');
 }
 
