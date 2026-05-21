@@ -406,19 +406,7 @@ function renderLayerList() {
 }
 
 function clickLayer(layerId) {
-  const layerInfo = layers.find(l => l.id === layerId);
-  if (!layerData[layerId]) { loadLayer(layerInfo); return; }
-  // 지도 뷰 맞추기
-  const features = layerData[layerId]?.features || [];
-  if (!features.length) return;
-  const allCoords = features.flatMap(f => f.coords||[]);
-  if (!allCoords.length) return;
-  const lats = allCoords.map(c=>c[0]), lngs = allCoords.map(c=>c[1]);
-  const bounds = new kakao.maps.LatLngBounds(
-    new kakao.maps.LatLng(Math.min(...lats), Math.min(...lngs)),
-    new kakao.maps.LatLng(Math.max(...lats), Math.max(...lngs))
-  );
-  map.setBounds(bounds);
+  toggleLayerVisibility(layerId, null);
 }
 
 function buildLegend() {
@@ -535,30 +523,28 @@ async function loadVisibleParcels() {
         parcelCache[tk] = data;
       } catch { loadedParcelTiles.add(tk); continue; }
     }
-    const sc = zoom>=16?6:zoom>=15?5:zoom>=14?4:3;
+    const zoom2 = map.getLevel();
+    const sz = zoom2<=2?8:zoom2<=3?7:zoom2<=4?6:5;
     data.forEach(p => {
       const color = getParcelColor(p);
-      const mk = new google.maps.Marker({
-        position:{lat:p[6],lng:p[7]}, map,
-        icon:{path:google.maps.SymbolPath.CIRCLE, scale:sc,
-          fillColor:color, fillOpacity:0.85, strokeColor:'rgba(255,255,255,0.5)', strokeWeight:0.5},
-        title: p[0]
+      const pos = new kakao.maps.LatLng(p[6], p[7]);
+      const el = document.createElement('div');
+      el.style.cssText = `width:${sz}px;height:${sz}px;border-radius:50%;background:${color};border:1px solid rgba(255,255,255,0.6);cursor:pointer;opacity:0.85`;
+      const ov = new kakao.maps.CustomOverlay({position:pos, content:el, zIndex:2});
+      ov.setMap(map);
+      ov._tile = tk;
+      el.addEventListener('click', () => {
+        if (activeInfoWin) { activeInfoWin.setMap(null); activeInfoWin = null; }
+        const iEl = document.createElement('div');
+        iEl.style.cssText = 'font-size:12px;line-height:1.9;color:#111;min-width:200px;padding:8px 10px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2)';
+        iEl.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:4px">${p[0]}</div><div>지목: <b>${p[1]||'-'}</b> | 면적: <b>${p[2].toLocaleString()}㎡</b></div><div>용도지역: <b>${p[3]||'-'}</b></div><div>이용상황: <b>${p[4]||'-'}</b></div><div>공시지가: <b>${p[5]?p[5].toLocaleString()+'원/㎡':'-'}</b></div><div style="text-align:right;margin-top:4px"><span onclick="this.closest('.kakao-iw-wrap').remove()" style="cursor:pointer;color:#888;font-size:11px">닫기 ✕</span></div>`;
+        const wrap = document.createElement('div');
+        wrap.className = 'kakao-iw-wrap';
+        wrap.appendChild(iEl);
+        activeInfoWin = new kakao.maps.CustomOverlay({position:pos, content:wrap, zIndex:10, yAnchor:1.3});
+        activeInfoWin.setMap(map);
       });
-      mk._tile = tk;
-      mk.addListener('click', () => {
-        if (activeInfoWin) activeInfoWin.close();
-        activeInfoWin = new google.maps.InfoWindow({
-          content: `<div style="font-size:12px;line-height:1.9;color:#111;min-width:200px;padding:2px 4px">
-            <div style="font-weight:700;font-size:13px;margin-bottom:4px">${p[0]}</div>
-            <div>지목: <b>${p[1]||'-'}</b> &nbsp;|&nbsp; 면적: <b>${p[2].toLocaleString()}㎡</b></div>
-            <div>용도지역: <b>${p[3]||'-'}</b></div>
-            <div>이용상황: <b>${p[4]||'-'}</b></div>
-            <div>개별공시지가: <b>${p[5]?p[5].toLocaleString()+'원/㎡':'-'}</b></div>
-          </div>`
-        });
-        activeInfoWin.open(map, mk);
-      });
-      parcelMarkers.push(mk);
+      parcelMarkers.push(ov);
     });
     loadedParcelTiles.add(tk);
   }
