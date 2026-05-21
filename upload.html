@@ -18,7 +18,7 @@ header{display:flex;align-items:center;gap:12px;padding:0 20px;height:50px;borde
 .nav-btn:hover{color:var(--text);}
 .container{max-width:680px;margin:0 auto;padding:32px 20px;}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;margin-bottom:20px;}
-.card-title{font-size:15px;font-weight:500;margin-bottom:18px;display:flex;align-items:center;gap:8px;}
+.card-title{font-size:15px;font-weight:500;margin-bottom:18px;}
 .form-group{margin-bottom:16px;}
 label{display:block;font-size:12px;color:var(--text2);margin-bottom:5px;}
 input,select,textarea{width:100%;padding:10px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;outline:none;}
@@ -26,9 +26,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 select option{background:var(--surface2);}
 textarea{resize:vertical;min-height:80px;}
 .color-row{display:flex;align-items:center;gap:10px;}
-.color-row input[type="color"]{width:44px;height:38px;padding:2px;cursor:pointer;}
+.color-row input[type="color"]{width:44px;height:38px;padding:2px;cursor:pointer;border-radius:6px;border:1px solid var(--border);}
 .color-presets{display:flex;gap:6px;flex-wrap:wrap;}
-.color-preset{width:24px;height:24px;border-radius:6px;cursor:pointer;border:2px solid transparent;transition:.15s;}
+.color-preset{width:24px;height:24px;border-radius:6px;cursor:pointer;border:2px solid transparent;transition:.15s;flex-shrink:0;}
 .color-preset:hover,.color-preset.active{border-color:#fff;}
 .drop-zone{border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:.15s;margin-bottom:16px;}
 .drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:#4ade8011;}
@@ -64,12 +64,9 @@ textarea{resize:vertical;min-height:80px;}
 </header>
 
 <div class="container">
-
-  <!-- 업로드 폼 -->
   <div class="card">
     <div class="card-title">📤 KMZ 파일 업로드</div>
 
-    <!-- 드래그앤드롭 -->
     <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
       ondragover="event.preventDefault();this.classList.add('drag')"
       ondragleave="this.classList.remove('drag')"
@@ -125,22 +122,18 @@ textarea{resize:vertical;min-height:80px;}
     <button class="btn" id="uploadBtn" onclick="doUpload()">업로드 신청</button>
   </div>
 
-  <!-- 내 업로드 목록 -->
   <div class="card">
     <div class="card-title">📋 내 업로드 목록</div>
     <div id="myUploads">로딩 중...</div>
   </div>
-
 </div>
 
 <script>
 const SUPABASE_URL = 'https://caldnkfhqeblusscaabs.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbGRua2ZocWVibHVzc2NhYWJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzIzMzUsImV4cCI6MjA5NDkwODMzNX0.z1n5-tqXz5fjy48faxE7nC09zdQKz4_f2mcE6wF8Zls';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
-
 let selectedFile = null, currentUser = null;
 
-// 인증 확인
 async function checkAuth(){
   const {data:{session}} = await sb.auth.getSession();
   if(!session){ location.href='login.html'; return; }
@@ -158,12 +151,10 @@ function handleFile(file){
   if(!file) return;
   if(file.size > 50*1024*1024){ showMsg('파일이 너무 커요 (최대 50MB)'); return; }
   selectedFile = file;
-  const zone = document.getElementById('dropZone');
-  zone.classList.add('file-selected');
+  document.getElementById('dropZone').classList.add('file-selected');
   document.getElementById('dropTxt').innerHTML = `<span class="file-name">📎 ${file.name}</span>`;
-  if(!document.getElementById('labelInput').value){
+  if(!document.getElementById('labelInput').value)
     document.getElementById('labelInput').value = file.name.replace(/\.(kmz|kml)$/i,'');
-  }
 }
 
 function handleDrop(e){
@@ -187,64 +178,48 @@ function showMsg(msg,type='error'){
 
 async function doUpload(){
   if(!selectedFile){ showMsg('파일을 선택해주세요'); return; }
-  const label = document.getElementById('labelInput').value.trim();
+  const label=document.getElementById('labelInput').value.trim();
   if(!label){ showMsg('레이어 이름을 입력해주세요'); return; }
-
-  const btn = document.getElementById('uploadBtn');
+  const btn=document.getElementById('uploadBtn');
   btn.disabled=true; btn.textContent='업로드 중...';
   document.getElementById('progressWrap').style.display='block';
   document.getElementById('progressBar').style.width='20%';
-
   try {
-    const ext = selectedFile.name.split('.').pop();
-    const path = `${currentUser.id}/${Date.now()}.${ext}`;
-
-    // Storage 업로드
-    const {error:upErr} = await sb.storage.from('kmz-files').upload(path, selectedFile);
+    const ext=selectedFile.name.split('.').pop();
+    const path=`${currentUser.id}/${Date.now()}.${ext}`;
+    const {error:upErr}=await sb.storage.from('kmz-files').upload(path,selectedFile);
     if(upErr) throw upErr;
     document.getElementById('progressBar').style.width='70%';
-
-    // DB 기록
-    const {error:dbErr} = await sb.from('kmz_uploads').insert({
-      uploader_id: currentUser.id,
-      file_name: selectedFile.name,
-      storage_path: path,
-      label,
-      color: document.getElementById('colorPicker').value,
-      layer_type: document.getElementById('typeSelect').value,
-      description: document.getElementById('descInput').value,
-      status: 'pending'
+    const {error:dbErr}=await sb.from('kmz_uploads').insert({
+      uploader_id:currentUser.id, file_name:selectedFile.name,
+      storage_path:path, label,
+      color:document.getElementById('colorPicker').value,
+      layer_type:document.getElementById('typeSelect').value,
+      description:document.getElementById('descInput').value, status:'pending'
     });
     if(dbErr) throw dbErr;
-
     document.getElementById('progressBar').style.width='100%';
     showMsg('업로드 완료! 관리자 검토 후 지도에 반영됩니다.','success');
-
-    // 폼 초기화
     selectedFile=null;
     document.getElementById('dropZone').classList.remove('file-selected');
     document.getElementById('dropTxt').textContent='클릭하거나 KMZ 파일을 드래그해주세요';
     document.getElementById('labelInput').value='';
     document.getElementById('descInput').value='';
     loadMyUploads();
-  } catch(e){
-    showMsg('업로드 실패: '+e.message);
-  }
-
+  } catch(e){ showMsg('업로드 실패: '+e.message); }
   btn.disabled=false; btn.textContent='업로드 신청';
   setTimeout(()=>{ document.getElementById('progressWrap').style.display='none'; document.getElementById('progressBar').style.width='0%'; },2000);
 }
 
 async function loadMyUploads(){
-  const {data} = await sb.from('kmz_uploads').select('*').eq('uploader_id',currentUser?.id).order('created_at',{ascending:false});
+  const {data}=await sb.from('kmz_uploads').select('*').eq('uploader_id',currentUser?.id).order('created_at',{ascending:false});
   if(!data?.length){ document.getElementById('myUploads').innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">업로드한 파일이 없어요</div>'; return; }
   document.getElementById('myUploads').innerHTML=`
     <table class="history-table">
       <thead><tr><th>파일명</th><th>레이어명</th><th>분류</th><th>상태</th><th>업로드일</th></tr></thead>
       <tbody>${data.map(f=>`
         <tr>
-          <td>${f.file_name}</td>
-          <td>${f.label}</td>
+          <td>${f.file_name}</td><td>${f.label}</td>
           <td>${{road:'도로',rail:'철도',dev:'개발',env:'환경',other:'기타'}[f.layer_type]||f.layer_type}</td>
           <td><span class="s-badge s-${f.status}">${{pending:'검토중',approved:'승인됨',rejected:'반려됨'}[f.status]}</span></td>
           <td>${new Date(f.created_at).toLocaleDateString('ko')}</td>
@@ -254,7 +229,6 @@ async function loadMyUploads(){
 }
 
 async function doLogout(){ await sb.auth.signOut(); location.href='login.html'; }
-
 checkAuth();
 </script>
 </body>

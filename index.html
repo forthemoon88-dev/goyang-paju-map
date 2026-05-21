@@ -577,10 +577,10 @@ let drawClickListener = null;
 function setDrawMode(mode) {
   drawMode = mode;
   document.querySelectorAll('.draw-btn').forEach(b => b.classList.remove('active'));
-  const btn = document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1));
+  const btnId = 'btn' + mode.charAt(0).toUpperCase() + mode.slice(1);
+  const btn = document.getElementById(btnId);
   if (btn) btn.classList.add('active');
 
-  // 기존 리스너 제거
   if (drawClickListener) {
     kakao.maps.event.removeListener(map, 'click', drawClickListener);
     drawClickListener = null;
@@ -588,13 +588,20 @@ function setDrawMode(mode) {
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
   drawingPath = [];
 
-  if (mode === 'marker') {
+  // 그리기 모드면 지도 드래그 비활성화
+  if (mode === 'select') {
+    map.setDraggable(true);
+    map.setCursor('');
+  } else {
+    map.setDraggable(false);
     map.setCursor('crosshair');
+  }
+
+  if (mode === 'marker') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
       placeMyMarker(e.latLng);
     });
   } else if (mode === 'line') {
-    map.setCursor('crosshair');
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
       drawingPath.push(e.latLng);
       if (drawingPath.length >= 2) {
@@ -607,30 +614,27 @@ function setDrawMode(mode) {
         drawingOverlay.setMap(map);
       }
     });
-    // 더블클릭으로 완성
     kakao.maps.event.addListener(map, 'dblclick', e => {
       if (drawMode !== 'line' || drawingPath.length < 2) return;
+      const color = document.getElementById('drawColor').value;
       const line = new kakao.maps.Polyline({
-        path: drawingPath,
-        strokeColor: document.getElementById('drawColor').value,
-        strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
+        path: [...drawingPath],
+        strokeColor: color, strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
       });
       line.setMap(map);
-      line._type = 'drawing';
-      addDrawingClickHandler(line, '선');
       myDrawings.push(line);
+      kakao.maps.event.addListener(line, 'click', e => showMyDrawingInfo(e.latLng, '선', myDrawings.length-1));
       if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
       drawingPath = [];
     });
   } else if (mode === 'polygon') {
-    map.setCursor('crosshair');
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
       drawingPath.push(e.latLng);
       if (drawingPath.length >= 3) {
         if (drawingOverlay) drawingOverlay.setMap(null);
         const color = document.getElementById('drawColor').value;
         drawingOverlay = new kakao.maps.Polygon({
-          path: drawingPath,
+          path: [...drawingPath],
           strokeColor: color, strokeWeight: 2, strokeOpacity: .9,
           fillColor: color, fillOpacity: .25
         });
@@ -641,19 +645,17 @@ function setDrawMode(mode) {
       if (drawMode !== 'polygon' || drawingPath.length < 3) return;
       const color = document.getElementById('drawColor').value;
       const poly = new kakao.maps.Polygon({
-        path: drawingPath,
+        path: [...drawingPath],
         strokeColor: color, strokeWeight: 2, strokeOpacity: .9,
         fillColor: color, fillOpacity: .25
       });
       poly.setMap(map);
-      poly._type = 'drawing';
-      addDrawingClickHandler(poly, '영역');
+      const idx = myDrawings.length;
       myDrawings.push(poly);
+      kakao.maps.event.addListener(poly, 'click', e => showMyDrawingInfo(e.latLng, '영역', idx));
       if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
       drawingPath = [];
     });
-  } else {
-    map.setCursor('');
   }
 }
 
@@ -664,9 +666,9 @@ function placeMyMarker(latLng) {
   el.style.cssText = 'transform:translate(-12px,-24px)';
   const ov = new kakao.maps.CustomOverlay({position:latLng, content:el, zIndex:5});
   ov.setMap(map);
-  ov._type = 'drawing';
-  el.addEventListener('click', () => showMyDrawingInfo(latLng, '마커', ov));
+  const idx = myDrawings.length;
   myDrawings.push(ov);
+  el.addEventListener('click', () => showMyDrawingInfo(latLng, '마커', idx));
 }
 
 function addDrawingClickHandler(overlay, type) {
@@ -676,7 +678,7 @@ function addDrawingClickHandler(overlay, type) {
 }
 
 let myInfoWin = null;
-function showMyDrawingInfo(pos, type, overlay) {
+function showMyDrawingInfo(pos, type, idx) {
   if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; }
   const el = document.createElement('div');
   el.className = 'my-marker-info';
@@ -685,29 +687,31 @@ function showMyDrawingInfo(pos, type, overlay) {
     위도: ${pos.getLat().toFixed(5)}<br>
     경도: ${pos.getLng().toFixed(5)}<br>
     <div style="display:flex;gap:6px;margin-top:6px">
-      <button onclick="deleteMyDrawing(this)" data-overlay-idx="${myDrawings.indexOf(overlay)}"
+      <button onclick="deleteMyDrawing(${idx})"
         style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #f87171;background:#fff;color:#f87171;cursor:pointer">삭제</button>
-      <button onclick="this.closest('.kakao-my-iw').remove()"
+      <button onclick="closeMyInfo()"
         style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer">닫기</button>
     </div>`;
   const wrap = document.createElement('div');
-  wrap.className = 'kakao-my-iw';
   wrap.appendChild(el);
   myInfoWin = new kakao.maps.CustomOverlay({position:pos, content:wrap, zIndex:10, yAnchor:1.3});
   myInfoWin.setMap(map);
 }
 
-function deleteMyDrawing(btn) {
-  const idx = parseInt(btn.dataset.overlayIdx);
-  if (myDrawings[idx]) { myDrawings[idx].setMap(null); myDrawings.splice(idx,1); }
+function closeMyInfo() {
   if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; }
+}
+
+function deleteMyDrawing(idx) {
+  if (myDrawings[idx]) { myDrawings[idx].setMap(null); myDrawings[idx] = null; }
+  closeMyInfo();
 }
 
 function clearMyDrawings() {
   if (!confirm('내 그리기를 모두 삭제할까요?')) return;
-  myDrawings.forEach(o => { if(o.setMap) o.setMap(null); });
+  myDrawings.forEach(o => { if(o && o.setMap) o.setMap(null); });
   myDrawings = [];
-  if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; }
+  closeMyInfo();
 }
 
 /* ════════════════════════════════
