@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>관리자 — 고양·파주 도시계획</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+:root{--bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3248;--accent:#4ade80;--text:#e8eaf0;--text2:#8b90a8;--text3:#555a72;--danger:#f87171;--warn:#f59e0b;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+header{display:flex;align-items:center;gap:12px;padding:0 20px;height:50px;border-bottom:1px solid var(--border);background:var(--surface);}
+.logo{font-size:14px;font-weight:700;}.logo span{color:var(--accent);}
+.badge{font-size:11px;background:#f59e0b22;color:var(--warn);border:1px solid #f59e0b44;padding:2px 8px;border-radius:99px;}
+.logout-btn{margin-left:auto;font-size:12px;color:var(--text3);cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;}
+.logout-btn:hover{color:var(--text);}
+.nav-map-btn{font-size:12px;color:var(--text2);cursor:pointer;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:transparent;margin-right:4px;}
+.nav-map-btn:hover{color:var(--text);}
+.container{max-width:1000px;margin:0 auto;padding:24px 20px;}
+.section{margin-bottom:32px;}
+.section-title{font-size:15px;font-weight:500;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.count-badge{font-size:11px;background:var(--surface2);border:1px solid var(--border);padding:2px 7px;border-radius:99px;color:var(--text3);}
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+th{padding:10px 14px;text-align:left;font-size:11px;color:var(--text3);font-weight:500;border-bottom:1px solid var(--border);background:var(--surface2);}
+td{padding:11px 14px;font-size:13px;border-bottom:1px solid var(--border);}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:var(--surface2);}
+.role-badge{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500;}
+.role-pending{background:#f59e0b22;color:var(--warn);}
+.role-uploader{background:#4ade8022;color:var(--accent);}
+.role-admin{background:#60a5fa22;color:#60a5fa;}
+.status-badge{font-size:11px;padding:2px 8px;border-radius:99px;font-weight:500;}
+.status-pending{background:#f59e0b22;color:var(--warn);}
+.status-approved{background:#4ade8022;color:var(--accent);}
+.status-rejected{background:#f8717122;color:var(--danger);}
+.btn-sm{font-size:11px;padding:4px 10px;border-radius:6px;cursor:pointer;border:none;font-family:inherit;font-weight:500;}
+.btn-approve{background:#4ade8022;color:var(--accent);border:1px solid #4ade8044;}
+.btn-approve:hover{background:#4ade8044;}
+.btn-reject{background:#f8717122;color:var(--danger);border:1px solid #f8717144;}
+.btn-reject:hover{background:#f8717144;}
+.btn-primary{background:var(--accent);color:#0f1117;padding:6px 14px;border-radius:8px;font-size:13px;}
+.btn-primary:hover{background:#22c55e;}
+.empty{padding:30px;text-align:center;color:var(--text3);font-size:13px;}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;}
+.stat-n{font-size:22px;font-weight:700;margin-bottom:2px;}
+.stat-l{font-size:11px;color:var(--text3);}
+.loading{text-align:center;padding:30px;color:var(--text3);}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">고양·파주 <span>도시계획</span></div>
+  <span class="badge">관리자</span>
+  <button class="nav-map-btn" onclick="location.href='index.html'">🗺 지도 보기</button>
+  <button class="nav-map-btn" onclick="location.href='upload.html'">📤 업로드</button>
+  <button class="logout-btn" onclick="doLogout()">로그아웃</button>
+</header>
+
+<div class="container">
+
+  <!-- 통계 -->
+  <div class="stat-grid">
+    <div class="stat"><div class="stat-n" id="statPending" style="color:var(--warn)">-</div><div class="stat-l">승인 대기 회원</div></div>
+    <div class="stat"><div class="stat-n" id="statUploaders" style="color:var(--accent)">-</div><div class="stat-l">승인된 업로더</div></div>
+    <div class="stat"><div class="stat-n" id="statFiles" style="color:#60a5fa">-</div><div class="stat-l">업로드된 파일</div></div>
+    <div class="stat"><div class="stat-n" id="statLayers" style="color:#a78bfa">-</div><div class="stat-l">활성 레이어</div></div>
+  </div>
+
+  <!-- 회원 관리 -->
+  <div class="section">
+    <div class="section-title">
+      👥 회원 관리
+      <span class="count-badge" id="memberCount">0명</span>
+    </div>
+    <div class="table-wrap">
+      <div id="memberTable" class="loading">로딩 중...</div>
+    </div>
+  </div>
+
+  <!-- 업로드 파일 관리 -->
+  <div class="section">
+    <div class="section-title">
+      📁 업로드된 KMZ 파일
+      <span class="count-badge" id="fileCount">0개</span>
+    </div>
+    <div class="table-wrap">
+      <div id="fileTable" class="loading">로딩 중...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const SUPABASE_URL = 'https://caldnkfhqeblusscaabs.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbGRua2ZocWVibHVzc2NhYWJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzIzMzUsImV4cCI6MjA5NDkwODMzNX0.z1n5-tqXz5fjy48faxE7nC09zdQKz4_f2mcE6wF8Zls';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+// 관리자 인증 확인
+async function checkAdmin(){
+  const {data:{session}} = await sb.auth.getSession();
+  if(!session){ location.href='login.html'; return false; }
+  const {data} = await sb.from('profiles').select('role').eq('id',session.user.id).single();
+  if(data?.role !== 'admin'){ alert('관리자 권한이 없어요'); location.href='login.html'; return false; }
+  return true;
+}
+
+async function loadStats(){
+  const [pending, uploaders, files, layers] = await Promise.all([
+    sb.from('profiles').select('*',{count:'exact',head:true}).eq('role','pending'),
+    sb.from('profiles').select('*',{count:'exact',head:true}).eq('role','uploader'),
+    sb.from('kmz_uploads').select('*',{count:'exact',head:true}),
+    sb.from('layers').select('*',{count:'exact',head:true}).eq('visible',true),
+  ]);
+  document.getElementById('statPending').textContent = pending.count??0;
+  document.getElementById('statUploaders').textContent = uploaders.count??0;
+  document.getElementById('statFiles').textContent = files.count??0;
+  document.getElementById('statLayers').textContent = layers.count??0;
+}
+
+async function loadMembers(){
+  const {data} = await sb.from('profiles').select('*').order('created_at',{ascending:false});
+  document.getElementById('memberCount').textContent = (data?.length||0)+'명';
+  if(!data?.length){ document.getElementById('memberTable').innerHTML='<div class="empty">회원이 없어요</div>'; return; }
+  document.getElementById('memberTable').innerHTML = `
+    <table>
+      <thead><tr><th>이름</th><th>이메일</th><th>역할</th><th>가입일</th><th>작업</th></tr></thead>
+      <tbody>
+        ${data.map(u=>`
+          <tr>
+            <td>${u.name||'-'}</td>
+            <td>${u.email}</td>
+            <td><span class="role-badge role-${u.role}">${{pending:'대기중',uploader:'업로더',admin:'관리자'}[u.role]||u.role}</span></td>
+            <td>${new Date(u.created_at).toLocaleDateString('ko')}</td>
+            <td style="display:flex;gap:5px">
+              ${u.role==='pending'?`<button class="btn-sm btn-approve" onclick="approveUser('${u.id}')">승인</button><button class="btn-sm btn-reject" onclick="rejectUser('${u.id}')">거절</button>`:''}
+              ${u.role==='uploader'?`<button class="btn-sm btn-reject" onclick="revokeUser('${u.id}')">권한 취소</button>`:''}
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function loadFiles(){
+  const {data} = await sb.from('kmz_uploads').select('*, profiles(name,email)').order('created_at',{ascending:false});
+  document.getElementById('fileCount').textContent = (data?.length||0)+'개';
+  if(!data?.length){ document.getElementById('fileTable').innerHTML='<div class="empty">업로드된 파일이 없어요</div>'; return; }
+  document.getElementById('fileTable').innerHTML = `
+    <table>
+      <thead><tr><th>파일명</th><th>레이어명</th><th>업로더</th><th>상태</th><th>업로드일</th><th>작업</th></tr></thead>
+      <tbody>
+        ${data.map(f=>`
+          <tr>
+            <td>${f.file_name}</td>
+            <td>${f.label}</td>
+            <td>${f.profiles?.name||'-'}</td>
+            <td><span class="status-badge status-${f.status}">${{pending:'검토중',approved:'승인됨',rejected:'반려됨'}[f.status]||f.status}</span></td>
+            <td>${new Date(f.created_at).toLocaleDateString('ko')}</td>
+            <td style="display:flex;gap:5px">
+              ${f.status==='pending'?`<button class="btn-sm btn-approve" onclick="approveFile('${f.id}')">지도 반영</button><button class="btn-sm btn-reject" onclick="rejectFile('${f.id}')">반려</button>`:''}
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+async function approveUser(id){
+  await sb.from('profiles').update({role:'uploader',approved_at:new Date().toISOString()}).eq('id',id);
+  loadMembers(); loadStats();
+}
+async function rejectUser(id){
+  if(!confirm('이 회원의 가입을 거절할까요?')) return;
+  await sb.from('profiles').update({role:'pending'}).eq('id',id);
+  loadMembers(); loadStats();
+}
+async function revokeUser(id){
+  if(!confirm('업로드 권한을 취소할까요?')) return;
+  await sb.from('profiles').update({role:'pending'}).eq('id',id);
+  loadMembers(); loadStats();
+}
+
+async function approveFile(id){
+  const {data:{session}} = await sb.auth.getSession();
+  await sb.from('kmz_uploads').update({status:'approved',reviewed_by:session.user.id,reviewed_at:new Date().toISOString()}).eq('id',id);
+  // layers 테이블에도 추가
+  const {data:f} = await sb.from('kmz_uploads').select('*').eq('id',id).single();
+  await sb.from('layers').insert({kmz_upload_id:id,label:f.label,color:f.color,layer_type:f.layer_type});
+  loadFiles(); loadStats();
+}
+async function rejectFile(id){
+  if(!confirm('이 파일을 반려할까요?')) return;
+  const {data:{session}} = await sb.auth.getSession();
+  await sb.from('kmz_uploads').update({status:'rejected',reviewed_by:session.user.id,reviewed_at:new Date().toISOString()}).eq('id',id);
+  loadFiles(); loadStats();
+}
+
+async function doLogout(){
+  await sb.auth.signOut();
+  location.href='login.html';
+}
+
+// 초기화
+checkAdmin().then(ok=>{ if(ok){ loadStats(); loadMembers(); loadFiles(); } });
+</script>
+</body>
+</html>

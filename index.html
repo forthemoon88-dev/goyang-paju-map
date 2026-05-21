@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>고양·파주 도시계획 지도</title>
+<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e7bab8ddea307ac3c4f861f4a2ff00cc&libraries=services"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
+:root{
+  --bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3248;
+  --accent:#4ade80;--text:#e8eaf0;--text2:#8b90a8;--text3:#555a72;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* 헤더 */
+header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;z-index:100;}
+.logo{font-size:14px;font-weight:700;white-space:nowrap;}.logo span{color:var(--accent);}
+.search-wrap{flex:1;max-width:300px;position:relative;}
+.search-wrap input{width:100%;padding:6px 12px 6px 30px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;outline:none;}
+.search-wrap input:focus{border-color:var(--accent);}
+.s-ico{position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--text3);}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.loading-pill{font-size:11px;color:var(--text3);display:none;align-items:center;gap:5px;padding:3px 10px;background:var(--surface2);border-radius:99px;border:1px solid var(--border);}
+.loading-pill.show{display:flex;}
+.spin{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.btn{padding:5px 12px;border-radius:7px;font-size:12px;font-family:inherit;font-weight:500;cursor:pointer;border:1px solid var(--border);background:transparent;color:var(--text2);}
+.btn:hover{background:var(--surface2);color:var(--text);}
+
+/* 메인 */
+.main{display:flex;flex:1;overflow:hidden;}
+
+/* 사이드바 */
+.sidebar{width:272px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+
+/* 레이어 패널 */
+.layer-panel{flex:1;overflow-y:auto;display:flex;flex-direction:column;}
+.layer-panel::-webkit-scrollbar{width:4px;}
+.layer-panel::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px;}
+
+.panel-section{border-bottom:1px solid var(--border);}
+.panel-title{display:flex;align-items:center;gap:7px;padding:8px 12px;font-size:11px;font-weight:500;color:var(--text3);letter-spacing:.05em;text-transform:uppercase;cursor:pointer;user-select:none;}
+.panel-title:hover{background:var(--surface2);}
+.panel-arrow{font-size:10px;transition:transform .2s;margin-left:auto;}
+.panel-arrow.open{transform:rotate(90deg);}
+.panel-body{display:none;}
+.panel-body.open{display:block;}
+
+/* 레이어 아이템 */
+.layer-item{display:flex;align-items:center;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;}
+.layer-item:last-child{border-bottom:none;}
+.layer-item:hover{background:var(--surface2);}
+.layer-item.active{background:var(--surface2);border-left:2px solid var(--accent);}
+.layer-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+.layer-name{font-size:12px;font-weight:500;color:var(--text);flex:1;line-height:1.3;}
+.layer-count{font-size:10px;color:var(--text3);background:var(--surface);padding:1px 5px;border-radius:99px;border:1px solid var(--border);}
+.layer-eye{font-size:13px;color:var(--text3);cursor:pointer;padding:2px 4px;border-radius:4px;}
+.layer-eye:hover{color:var(--accent);}
+.layer-sub{padding:4px 12px 4px 30px;font-size:11px;color:var(--text3);}
+
+/* 필지 토글 */
+.parcel-section{border-bottom:1px solid var(--border);}
+.parcel-row{display:flex;align-items:center;gap:7px;padding:8px 12px;}
+.parcel-row span{font-size:12px;color:var(--text2);}
+.tog-btn{padding:3px 10px;border-radius:99px;font-size:11px;font-weight:500;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit;}
+.tog-btn.on{background:#22d3ee22;color:#22d3ee;border-color:#22d3ee;}
+.parcel-options{padding:4px 12px 8px;display:none;gap:6px;flex-wrap:wrap;}
+.parcel-options.show{display:flex;}
+.opt-btn{padding:2px 8px;font-size:11px;border-radius:99px;border:1px solid var(--border);background:transparent;color:var(--text3);cursor:pointer;font-family:inherit;}
+.opt-btn.active{background:var(--accent);color:#0f1117;border-color:var(--accent);}
+
+/* 지도 */
+.map-wrap{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;}
+#gmap{flex:1;min-height:0;}
+
+/* 범례 — 좌측 하단 */
+.legend{position:absolute;bottom:10px;left:10px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:11px;z-index:20;max-width:160px;max-height:40vh;overflow-y:auto;}
+.legend::-webkit-scrollbar{width:3px;}
+.legend-h{font-weight:500;color:var(--text2);margin-bottom:6px;font-size:10px;letter-spacing:.05em;text-transform:uppercase;}
+.legend-item{display:flex;align-items:center;gap:6px;margin-bottom:3px;color:var(--text2);font-size:11px;}
+.l-box{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+.l-line{width:18px;height:4px;border-radius:2px;flex-shrink:0;}
+.l-sep{border:none;border-top:1px solid var(--border);margin:5px 0;}
+.l-status{display:flex;align-items:center;gap:5px;margin-bottom:2px;color:var(--text3);font-size:10px;}
+.l-dot{width:5px;height:5px;border-radius:50%;}
+
+/* 지적편집도 버튼 */
+.cadastral-btn{
+  position:absolute;bottom:10px;right:10px;
+  padding:6px 12px;font-size:12px;font-weight:500;
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;cursor:pointer;color:var(--text2);
+  z-index:20;font-family:inherit;
+  display:flex;align-items:center;gap:5px;
+  transition:all .15s;
+}
+.cadastral-btn:hover{background:var(--surface2);color:var(--text);}
+.cadastral-btn.on{background:#4ade8022;color:#4ade80;border-color:#4ade80;}
+
+/* 하단 상세 */
+.detail{height:0;flex-shrink:0;border-top:0;background:var(--surface);overflow:hidden;transition:height .2s;}
+.detail.show{height:180px;border-top:1px solid var(--border);}
+.detail-inner{padding:12px 16px;height:100%;overflow-y:auto;}
+.d-title{font-size:14px;font-weight:500;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.d-close{margin-left:auto;color:var(--text3);cursor:pointer;font-size:14px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:transparent;}
+.d-close:hover{color:var(--text);}
+.d-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px;}
+.df-l{font-size:10px;color:var(--text3);margin-bottom:1px;}
+.df-v{font-size:12px;color:var(--text);font-weight:500;}
+.d-desc{font-size:12px;color:var(--text2);line-height:1.7;}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">고양·파주 <span>도시계획</span></div>
+  <div class="search-wrap">
+    <span class="s-ico">🔍</span>
+    <input type="text" placeholder="레이어·지명 검색...">
+  </div>
+  <div class="hdr-right">
+    <div class="loading-pill" id="loadingPill">
+      <div class="spin"></div>
+      <span id="loadingText">로딩 중...</span>
+    </div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="sidebar">
+    <div class="layer-panel" id="layerPanel">
+
+      <!-- KMZ 레이어 섹션 -->
+      <div class="panel-section">
+        <div class="panel-title" onclick="toggleSection('kmzSection')">
+          <span>🗂</span> KMZ 레이어
+          <span class="panel-arrow open" id="kmzSectionArrow">▶</span>
+        </div>
+        <div class="panel-body open" id="kmzSection">
+          <div id="layerList">
+            <div style="padding:12px;font-size:12px;color:var(--text3)">레이어 로딩 중...</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 필지 레이어 섹션 -->
+      <div class="parcel-section">
+        <div class="panel-title" onclick="toggleSection('parcelSection')">
+          <span>🏠</span> 필지 레이어
+          <span class="panel-arrow" id="parcelSectionArrow">▶</span>
+        </div>
+        <div class="panel-body" id="parcelSection">
+          <div class="parcel-row">
+            <span>표시</span>
+            <button class="tog-btn" id="parcelToggleBtn" onclick="toggleParcel()">OFF</button>
+            <span style="font-size:11px;color:var(--text3)">줌 13+</span>
+          </div>
+          <div class="parcel-options" id="parcelOptions">
+            <span style="font-size:11px;color:var(--text3);width:100%;padding:0 0 2px">색상 기준:</span>
+            <button class="opt-btn active" onclick="setParcelMode('zone',this)">용도지역</button>
+            <button class="opt-btn" onclick="setParcelMode('usage',this)">이용상황</button>
+            <button class="opt-btn" onclick="setParcelMode('jibun',this)">지목</button>
+          </div>
+          <div style="padding:4px 12px 8px;font-size:11px;color:var(--text3)">
+            덕양구 100,759 · 일산동구 49,454 · 일산서구 27,960
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="map-wrap">
+    <div id="gmap"></div>
+
+    <div class="legend" id="mapLegend">
+      <div class="legend-h">레이어</div>
+      <div id="legendItems"></div>
+      <div id="parcelLegend" style="display:none">
+        <hr class="l-sep">
+        <div class="legend-h" style="color:#22d3ee">필지 색상</div>
+        <div id="parcelLegendItems"></div>
+      </div>
+    </div>
+
+    <!-- 지적편집도 버튼 -->
+    <button class="cadastral-btn" id="cadastralBtn" onclick="toggleCadastral()">
+      <span>🗺</span> 지적편집도
+    </button>
+
+    <div class="detail" id="detailPanel">
+      <div class="detail-inner" id="detailInner"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════
+   설정
+════════════════════════════════ */
+const GITHUB_RAW = 'https://raw.githubusercontent.com/forthemoon88-dev/goyang-paju-map/main/';
+const LAYER_COLORS = {
+  road:'#60a5fa', rail:'#f472b6', dev:'#a78bfa',
+  env:'#22d3ee', other:'#94a3b8'
+};
+const ZONE_COLOR = {
+  '제1종전용주거지역':'#bfdbfe','제2종전용주거지역':'#93c5fd',
+  '제1종일반주거지역':'#60a5fa','제2종일반주거지역':'#3b82f6','제3종일반주거지역':'#2563eb',
+  '준주거지역':'#818cf8','중심상업지역':'#f87171','일반상업지역':'#fb923c',
+  '근린상업지역':'#fbbf24','유통상업지역':'#f59e0b',
+  '전용공업지역':'#4b5563','일반공업지역':'#6b7280','준공업지역':'#9ca3af',
+  '보전녹지지역':'#86efac','생산녹지지역':'#4ade80','자연녹지지역':'#22c55e',
+  '보전관리지역':'#a3e635','생산관리지역':'#84cc16','계획관리지역':'#65a30d',
+  '농림지역':'#ca8a04','자연환경보전지역':'#166534','개발제한구역':'#dc2626'
+};
+const USAGE_COLOR = {'주거':'#60a5fa','상업':'#f87171','공업':'#9ca3af','전':'#86efac','답':'#4ade80','임야':'#22c55e','도로':'#94a3b8'};
+const JIBUN_COLOR = {'전':'#86efac','답':'#4ade80','과':'#a3e635','목':'#84cc16','임':'#22c55e','대':'#60a5fa','도':'#94a3b8','공':'#f59e0b'};
+
+/* ════════════════════════════════
+   상태
+════════════════════════════════ */
+let map;
+let layers = [];           // layers.json 데이터
+let layerData = {};        // 로드된 레이어 데이터
+let layerOverlays = {};    // 레이어별 지도 오버레이
+let layerVisible = {};     // 레이어 가시성
+let parcelOn = false, parcelMode = 'zone';
+let parcelMarkers = [], parcelCache = {}, loadedParcelTiles = new Set();
+let activeInfoWin = null;
+const PTILE = 0.02;
+
+/* ════════════════════════════════
+   초기화
+════════════════════════════════ */
+async function init() {
+  const container = document.getElementById('gmap');
+  const options = {
+    center: new kakao.maps.LatLng(37.700, 126.840),
+    level: 7
+  };
+  map = new kakao.maps.Map(container, options);
+
+  // 지도 타입 컨트롤 (일반/스카이뷰)
+  const mapTypeControl = new kakao.maps.MapTypeControl();
+  map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
+
+  // 줌 컨트롤
+  const zoomControl = new kakao.maps.ZoomControl();
+  map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
+
+  // 지도 이동 시 필지 업데이트
+  kakao.maps.event.addListener(map, 'idle', () => { if(parcelOn) loadVisibleParcels(); });
+
+  // layers.json 로드 (GitHub에 올린 후 동작)
+  loading('레이어 목록 로딩...');
+  try {
+    const res = await fetch(GITHUB_RAW + 'data/layers.json');
+    layers = await res.json();
+    layers.forEach(l => { layerVisible[l.id] = l.visible !== false; });
+    renderLayerList();
+    buildLegend();
+    for (const l of layers) {
+      if (layerVisible[l.id]) await loadLayer(l);
+    }
+  } catch(e) {
+    document.getElementById('layerList').innerHTML =
+      '<div style="padding:12px;font-size:12px;color:var(--text3)">GitHub에 파일 업로드 후<br>레이어가 표시됩니다</div>';
+  }
+  loading('');
+}
+
+/* ════════════════════════════════
+   레이어 관리
+════════════════════════════════ */
+async function loadLayer(layerInfo) {
+  if (layerData[layerInfo.id]) { renderLayerOverlays(layerInfo.id); return; }
+  if (layerInfo.type === 'parcel') return; // 필지는 별도 처리
+  loading(`${layerInfo.label || layerInfo.id} 로딩...`);
+  try {
+    const res = await fetch(GITHUB_RAW + layerInfo.file);
+    const data = await res.json();
+    layerData[layerInfo.id] = data;
+    renderLayerOverlays(layerInfo.id);
+  } catch(e) { console.warn('레이어 로드 실패:', layerInfo.id, e); }
+  loading('');
+}
+
+function renderLayerOverlays(layerId) {
+  // 기존 오버레이 제거
+  if (layerOverlays[layerId]) {
+    layerOverlays[layerId].forEach(o => { if(o.setMap) o.setMap(null); });
+  }
+  layerOverlays[layerId] = [];
+  if (!layerVisible[layerId] || !layerData[layerId]) return;
+
+  const data = layerData[layerId];
+  const layerInfo = layers.find(l => l.id === layerId);
+  const color = layerInfo?.color || '#60a5fa';
+  const features = data.features || [];
+
+  features.forEach(f => {
+    const coords = f.coords;
+    if (!coords || coords.length === 0) return;
+
+    if (f.geom === 'marker' || coords.length === 1) {
+      const pos = new kakao.maps.LatLng(coords[0][0], coords[0][1]);
+      const el = document.createElement('div');
+      el.style.cssText = `width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.4)`;
+      const ov = new kakao.maps.CustomOverlay({position:pos, content:el, zIndex:3});
+      ov.setMap(map);
+      el.addEventListener('click', () => showDetail(f, color));
+      layerOverlays[layerId].push(ov);
+
+    } else if (f.geom === 'polygon') {
+      const path = coords.map(c => new kakao.maps.LatLng(c[0], c[1]));
+      const poly = new kakao.maps.Polygon({
+        path, strokeWeight:1.5, strokeColor:color, strokeOpacity:.85,
+        fillColor:color, fillOpacity:.3
+      });
+      poly.setMap(map);
+      kakao.maps.event.addListener(poly, 'click', () => showDetail(f, color));
+      layerOverlays[layerId].push(poly);
+
+    } else if (f.geom === 'line') {
+      const path = coords.map(c => new kakao.maps.LatLng(c[0], c[1]));
+      const outline = new kakao.maps.Polyline({
+        path, strokeWeight:6, strokeColor:'#ffffff', strokeOpacity:.35, strokeStyle:'solid'
+      });
+      const line = new kakao.maps.Polyline({
+        path, strokeWeight:4, strokeColor:color, strokeOpacity:.9, strokeStyle:'solid'
+      });
+      outline.setMap(map); line.setMap(map);
+      kakao.maps.event.addListener(line, 'click', () => showDetail(f, color));
+      layerOverlays[layerId].push(outline, line);
+    }
+  });
+}
+
+function toggleLayerVisibility(layerId, e) {
+  e && e.stopPropagation();
+  layerVisible[layerId] = !layerVisible[layerId];
+  const layerInfo = layers.find(l => l.id === layerId);
+  if (layerVisible[layerId] && !layerData[layerId]) {
+    loadLayer(layerInfo);
+  } else {
+    renderLayerOverlays(layerId);
+  }
+  renderLayerList();
+}
+
+/* ════════════════════════════════
+   사이드바 렌더링
+════════════════════════════════ */
+function renderLayerList() {
+  const el = document.getElementById('layerList');
+  if (!layers.length) {
+    el.innerHTML = '<div style="padding:12px;font-size:12px;color:var(--text3)">레이어 없음</div>';
+    return;
+  }
+  el.innerHTML = layers.filter(l => l.type !== 'parcel').map(l => `
+    <div class="layer-item${layerVisible[l.id]?' active':''}" onclick="clickLayer('${l.id}')">
+      <div class="layer-dot" style="background:${l.color||'#888'};${!layerVisible[l.id]?'opacity:.3':''}"></div>
+      <span class="layer-name" style="${!layerVisible[l.id]?'opacity:.4':''}">${l.label||l.id}</span>
+      ${layerData[l.id]?`<span class="layer-count">${(layerData[l.id].features||[]).length}</span>`:''}
+      <span class="layer-eye" onclick="toggleLayerVisibility('${l.id}',event)">${layerVisible[l.id]?'👁':'🚫'}</span>
+    </div>`).join('');
+}
+
+function clickLayer(layerId) {
+  const layerInfo = layers.find(l => l.id === layerId);
+  if (!layerData[layerId]) { loadLayer(layerInfo); return; }
+  // 지도 뷰 맞추기
+  const features = layerData[layerId]?.features || [];
+  if (!features.length) return;
+  const allCoords = features.flatMap(f => f.coords||[]);
+  if (!allCoords.length) return;
+  const lats = allCoords.map(c=>c[0]), lngs = allCoords.map(c=>c[1]);
+  const bounds = new kakao.maps.LatLngBounds(
+    new kakao.maps.LatLng(Math.min(...lats), Math.min(...lngs)),
+    new kakao.maps.LatLng(Math.max(...lats), Math.max(...lngs))
+  );
+  map.setBounds(bounds);
+}
+
+function buildLegend() {
+  const el = document.getElementById('legendItems');
+  el.innerHTML = layers.filter(l=>l.type!=='parcel').map(l=>`
+    <div class="legend-item">
+      <div class="l-box" style="background:${l.color||'#888'};opacity:${layerVisible[l.id]?1:.3}"></div>
+      <span style="opacity:${layerVisible[l.id]?1:.4}">${l.label||l.id}</span>
+    </div>`).join('');
+}
+
+function toggleSection(id) {
+  const body = document.getElementById(id);
+  const arrow = document.getElementById(id+'Arrow');
+  body.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+/* ════════════════════════════════
+   상세 패널
+════════════════════════════════ */
+function showDetail(f, color) {
+  const panel = document.getElementById('detailPanel');
+  const inner = document.getElementById('detailInner');
+  panel.classList.add('show');
+  inner.innerHTML = `
+    <div class="d-title">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${color}"></span>
+      ${f.name || '이름 없음'}
+      <button class="d-close" onclick="closeDetail()">✕</button>
+    </div>
+    <div class="d-desc">${f.desc||f.geom||''}</div>`;
+}
+function closeDetail() {
+  document.getElementById('detailPanel').classList.remove('show');
+}
+
+/* ════════════════════════════════
+   필지 레이어
+════════════════════════════════ */
+function getParcelColor(p) {
+  if (parcelMode === 'zone') return ZONE_COLOR[p[3]] || '#94a3b8';
+  if (parcelMode === 'usage') {
+    for (const [k,v] of Object.entries(USAGE_COLOR)) if ((p[4]||'').includes(k)) return v;
+    return '#94a3b8';
+  }
+  for (const [k,v] of Object.entries(JIBUN_COLOR)) if ((p[1]||'').includes(k)) return v;
+  return '#94a3b8';
+}
+
+function toggleParcel() {
+  parcelOn = !parcelOn;
+  const btn = document.getElementById('parcelToggleBtn');
+  const opts = document.getElementById('parcelOptions');
+  const leg = document.getElementById('parcelLegend');
+  btn.textContent = parcelOn ? 'ON' : 'OFF';
+  btn.className = 'tog-btn' + (parcelOn ? ' on' : '');
+  opts.className = 'parcel-options' + (parcelOn ? ' show' : '');
+  leg.style.display = parcelOn ? 'block' : 'none';
+  if (parcelOn) { updateParcelLegend(); loadVisibleParcels(); }
+  else { clearParcelMarkers(); loadedParcelTiles.clear(); }
+}
+
+function setParcelMode(mode, btn) {
+  parcelMode = mode;
+  document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateParcelLegend();
+  if (parcelOn) { clearParcelMarkers(); loadedParcelTiles.clear(); loadVisibleParcels(); }
+}
+
+function updateParcelLegend() {
+  const colorMap = parcelMode==='zone' ? ZONE_COLOR : parcelMode==='usage' ? USAGE_COLOR : JIBUN_COLOR;
+  document.getElementById('parcelLegendItems').innerHTML =
+    Object.entries(colorMap).slice(0,8).map(([k,v])=>
+      `<div class="l-status"><div class="l-dot" style="background:${v}"></div>${k||'기타'}</div>`
+    ).join('');
+}
+
+function clearParcelMarkers() {
+  parcelMarkers.forEach(m => { if(m.setMap) m.setMap(null); });
+  parcelMarkers = [];
+}
+
+async function loadVisibleParcels() {
+  if (!map || !parcelOn) return;
+  const zoom = map.getLevel();
+  if (zoom > 5) {
+    clearParcelMarkers(); loadedParcelTiles.clear();
+    loading('필지: 줌 13 이상에서 표시'); setTimeout(()=>loading(''), 2000);
+    return;
+  }
+  const bounds = map.getBounds(); if (!bounds) return;
+  const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
+  const needed = new Set();
+  for (let la=Math.floor(sw.lat()/PTILE)*PTILE; la<=ne.lat()+PTILE; la=+(la+PTILE).toFixed(2))
+    for (let ln=Math.floor(sw.lng()/PTILE)*PTILE; ln<=ne.lng()+PTILE; ln=+(ln+PTILE).toFixed(2))
+      needed.add(`${la.toFixed(2)}_${ln.toFixed(2)}`);
+
+  // 뷰 벗어난 마커 제거
+  parcelMarkers = parcelMarkers.filter(m => {
+    if (!needed.has(m._tile)) { m.setMap(null); return false; } return true;
+  });
+  const cur = new Set(parcelMarkers.map(m => m._tile));
+
+  for (const tk of needed) {
+    if (cur.has(tk)) continue;
+    let data = parcelCache[tk];
+    if (!data) {
+      try {
+        const res = await fetch(GITHUB_RAW + `data/parcels/${tk}.json`);
+        if (!res.ok) { loadedParcelTiles.add(tk); continue; }
+        data = await res.json();
+        parcelCache[tk] = data;
+      } catch { loadedParcelTiles.add(tk); continue; }
+    }
+    const sc = zoom>=16?6:zoom>=15?5:zoom>=14?4:3;
+    data.forEach(p => {
+      const color = getParcelColor(p);
+      const mk = new google.maps.Marker({
+        position:{lat:p[6],lng:p[7]}, map,
+        icon:{path:google.maps.SymbolPath.CIRCLE, scale:sc,
+          fillColor:color, fillOpacity:0.85, strokeColor:'rgba(255,255,255,0.5)', strokeWeight:0.5},
+        title: p[0]
+      });
+      mk._tile = tk;
+      mk.addListener('click', () => {
+        if (activeInfoWin) activeInfoWin.close();
+        activeInfoWin = new google.maps.InfoWindow({
+          content: `<div style="font-size:12px;line-height:1.9;color:#111;min-width:200px;padding:2px 4px">
+            <div style="font-weight:700;font-size:13px;margin-bottom:4px">${p[0]}</div>
+            <div>지목: <b>${p[1]||'-'}</b> &nbsp;|&nbsp; 면적: <b>${p[2].toLocaleString()}㎡</b></div>
+            <div>용도지역: <b>${p[3]||'-'}</b></div>
+            <div>이용상황: <b>${p[4]||'-'}</b></div>
+            <div>개별공시지가: <b>${p[5]?p[5].toLocaleString()+'원/㎡':'-'}</b></div>
+          </div>`
+        });
+        activeInfoWin.open(map, mk);
+      });
+      parcelMarkers.push(mk);
+    });
+    loadedParcelTiles.add(tk);
+  }
+}
+
+/* ════════════════════════════════
+   지적편집도
+════════════════════════════════ */
+let cadastralOn = false;
+function toggleCadastral() {
+  cadastralOn = !cadastralOn;
+  const btn = document.getElementById('cadastralBtn');
+  if (cadastralOn) {
+    map.addOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
+    btn.className = 'cadastral-btn on';
+    btn.innerHTML = '<span>🗺</span> 지적편집도 ON';
+  } else {
+    map.removeOverlayMapTypeId(kakao.maps.MapTypeId.USE_DISTRICT);
+    btn.className = 'cadastral-btn';
+    btn.innerHTML = '<span>🗺</span> 지적편집도';
+  }
+}
+
+/* ════════════════════════════════
+   유틸
+════════════════════════════════ */
+function loading(msg) {
+  const pill = document.getElementById('loadingPill');
+  const txt = document.getElementById('loadingText');
+  pill.className = 'loading-pill' + (msg ? ' show' : '');
+  if (txt) txt.textContent = msg;
+}
+
+/* ════════════════════════════════
+   시작
+════════════════════════════════ */
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
