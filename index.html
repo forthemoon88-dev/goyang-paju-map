@@ -664,9 +664,10 @@ let drawMode = 'select';
 let myDrawings = [];
 let drawingPath = [];
 let drawingOverlay = null;
-let drawingDots = [];      // 클릭 위치 표시 점들
+let drawingDots = [];
 let drawClickListener = null;
-let longPressTimer = null;
+let drawRightClickListener = null;
+let draggingDotIdx = -1;
 
 function setDrawMode(mode) {
   drawMode = mode;
@@ -678,6 +679,10 @@ function setDrawMode(mode) {
   if (drawClickListener) {
     kakao.maps.event.removeListener(map, 'click', drawClickListener);
     drawClickListener = null;
+  }
+  if (drawRightClickListener) {
+    kakao.maps.event.removeListener(map, 'rightclick', drawRightClickListener);
+    drawRightClickListener = null;
   }
   clearDrawingDots();
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
@@ -699,30 +704,12 @@ function setDrawMode(mode) {
   } else if (mode === 'line') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
       drawingPath.push(e.latLng);
-      addDrawingDot(e.latLng, drawingPath.length);
-      if (drawingPath.length >= 2) {
-        if (drawingOverlay) drawingOverlay.setMap(null);
-        drawingOverlay = new kakao.maps.Polyline({
-          path: drawingPath, strokeColor: document.getElementById('drawColor').value,
-          strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
-        });
-        drawingOverlay.setMap(map);
-      }
+      addDrawingDot(e.latLng, drawingPath.length - 1);
+      updateDrawingOverlay();
     });
-    kakao.maps.event.addListener(map, 'dblclick', e => {
+    drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', e => {
       if (drawMode !== 'line' || drawingPath.length < 2) return;
-      const color = document.getElementById('drawColor').value;
-      const line = new kakao.maps.Polyline({
-        path: [...drawingPath], strokeColor: color,
-        strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
-      });
-      line.setMap(map);
-      const idx = myDrawings.length;
-      myDrawings.push(line);
-      kakao.maps.event.addListener(line, 'click', e => showMyDrawingInfo(e.latLng, '선', idx));
-      if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
-      clearDrawingDots();
-      drawingPath = [];
+      finalizeLine();
     });
 
   } else if (mode === 'polygon') {
@@ -739,65 +726,23 @@ function setDrawMode(mode) {
         drawingOverlay.setMap(map);
       }
     });
-    kakao.maps.event.addListener(map, 'dblclick', e => {
+    drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', e => {
       if (drawMode !== 'polygon' || drawingPath.length < 3) return;
-      const color = document.getElementById('drawColor').value;
-      const poly = new kakao.maps.Polygon({
-        path: [...drawingPath], strokeColor: color,
-        strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
-      });
-      poly.setMap(map);
-      const idx = myDrawings.length;
-      myDrawings.push(poly);
-      kakao.maps.event.addListener(poly, 'click', e => showMyDrawingInfo(e.latLng, '영역', idx));
-      if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
-      clearDrawingDots();
-      drawingPath = [];
+      finalizePolygon();
     });
   }
 }
 
-// 클릭 위치 점 표시
-function addDrawingDot(latLng, num) {
-  const el = document.createElement('div');
-  el.style.cssText = `
-    width:20px;height:20px;border-radius:50%;
-    background:${document.getElementById('drawColor').value};
-    border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);
-    display:flex;align-items:center;justify-content:center;
-    font-size:9px;font-weight:700;color:#fff;
-    transform:translate(-10px,-10px);cursor:pointer;
-    font-family:sans-serif;`;
-  el.textContent = num;
-  // 길게 누르면 마지막 점 삭제
-  el.addEventListener('mousedown', () => {
-    longPressTimer = setTimeout(() => {
-      undoLastPoint();
-    }, 600);
-  });
-  el.addEventListener('mouseup', () => clearTimeout(longPressTimer));
-  el.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
-  const ov = new kakao.maps.CustomOverlay({ position: latLng, content: el, zIndex: 15 });
-  ov.setMap(map);
-  drawingDots.push(ov);
-}
-
-// 마지막 점 취소
-function undoLastPoint() {
-  if (drawingPath.length === 0) return;
-  drawingPath.pop();
-  const lastDot = drawingDots.pop();
-  if (lastDot) lastDot.setMap(null);
-  // 오버레이 업데이트
+function updateDrawingOverlay() {
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
-  if (drawingPath.length >= 2 && drawMode === 'line') {
+  const color = document.getElementById('drawColor').value;
+  if (drawMode === 'line' && drawingPath.length >= 2) {
     drawingOverlay = new kakao.maps.Polyline({
-      path: drawingPath, strokeColor: document.getElementById('drawColor').value,
+      path: [...drawingPath], strokeColor: color,
       strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
     });
     drawingOverlay.setMap(map);
-  } else if (drawingPath.length >= 3 && drawMode === 'polygon') {
-    const color = document.getElementById('drawColor').value;
+  } else if (drawMode === 'polygon' && drawingPath.length >= 3) {
     drawingOverlay = new kakao.maps.Polygon({
       path: [...drawingPath], strokeColor: color,
       strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
@@ -805,6 +750,90 @@ function undoLastPoint() {
     drawingOverlay.setMap(map);
   }
 }
+
+function finalizeLine() {
+  const color = document.getElementById('drawColor').value;
+  const line = new kakao.maps.Polyline({
+    path: [...drawingPath], strokeColor: color,
+    strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
+  });
+  line.setMap(map);
+  const idx = myDrawings.length;
+  myDrawings.push(line);
+  kakao.maps.event.addListener(line, 'click', e => showMyDrawingInfo(e.latLng, '선', idx));
+  if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
+  clearDrawingDots(); drawingPath = [];
+}
+
+function finalizePolygon() {
+  const color = document.getElementById('drawColor').value;
+  const poly = new kakao.maps.Polygon({
+    path: [...drawingPath], strokeColor: color,
+    strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
+  });
+  poly.setMap(map);
+  const idx = myDrawings.length;
+  myDrawings.push(poly);
+  kakao.maps.event.addListener(poly, 'click', e => showMyDrawingInfo(e.latLng, '영역', idx));
+  if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
+  clearDrawingDots(); drawingPath = [];
+}
+
+// 클릭 위치 점 표시 (드래그로 수정 가능)
+function addDrawingDot(latLng, idx) {
+  const el = document.createElement('div');
+  el.style.cssText = `
+    width:22px;height:22px;border-radius:50%;
+    background:${document.getElementById('drawColor').value};
+    border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);
+    display:flex;align-items:center;justify-content:center;
+    font-size:9px;font-weight:700;color:#fff;
+    transform:translate(-11px,-11px);cursor:grab;
+    font-family:sans-serif;user-select:none;`;
+  el.textContent = idx + 1;
+
+  // 드래그로 점 이동
+  el.addEventListener('mousedown', ev => {
+    ev.stopPropagation();
+    draggingDotIdx = idx;
+    el.style.cursor = 'grabbing';
+    el.style.transform = 'translate(-11px,-11px) scale(1.2)';
+
+    const onMouseMove = ev2 => {
+      if (draggingDotIdx < 0) return;
+      const mapEl = document.getElementById('gmap');
+      const rect = mapEl.getBoundingClientRect();
+      const x = ev2.clientX - rect.left;
+      const y = ev2.clientY - rect.top;
+      const proj = map.getProjection();
+      const point = new kakao.maps.Point(x, y);
+      const newLatLng = proj.coordsFromContainerPoint(point);
+      // 경로 업데이트
+      drawingPath[draggingDotIdx] = newLatLng;
+      // 점 오버레이 위치 업데이트
+      drawingDots[draggingDotIdx].setPosition(newLatLng);
+      // 미리보기 업데이트
+      updateDrawingOverlay();
+    };
+
+    const onMouseUp = () => {
+      draggingDotIdx = -1;
+      el.style.cursor = 'grab';
+      el.style.transform = 'translate(-11px,-11px) scale(1)';
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  });
+
+  const ov = new kakao.maps.CustomOverlay({ position: latLng, content: el, zIndex: 15 });
+  ov.setMap(map);
+  drawingDots.push(ov);
+}
+
+
 
 function clearDrawingDots() {
   drawingDots.forEach(o => o.setMap(null));
