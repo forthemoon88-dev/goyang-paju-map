@@ -162,29 +162,7 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
         </div>
       </div>
 
-      <!-- 필지 레이어 섹션 -->
-      <div class="parcel-section">
-        <div class="panel-title" onclick="toggleSection('parcelSection')">
-          <span>🏠</span> 필지 레이어
-          <span class="panel-arrow" id="parcelSectionArrow">▶</span>
-        </div>
-        <div class="panel-body" id="parcelSection">
-          <div class="parcel-row">
-            <span>표시</span>
-            <button class="tog-btn" id="parcelToggleBtn" onclick="toggleParcel()">OFF</button>
-            <span style="font-size:11px;color:var(--text3)">줌 13+</span>
-          </div>
-          <div class="parcel-options" id="parcelOptions">
-            <span style="font-size:11px;color:var(--text3);width:100%;padding:0 0 2px">색상 기준:</span>
-            <button class="opt-btn active" onclick="setParcelMode('zone',this)">용도지역</button>
-            <button class="opt-btn" onclick="setParcelMode('usage',this)">이용상황</button>
-            <button class="opt-btn" onclick="setParcelMode('jibun',this)">지목</button>
-          </div>
-          <div style="padding:4px 12px 8px;font-size:11px;color:var(--text3)">
-            덕양구 100,759 · 일산동구 49,454 · 일산서구 27,960
-          </div>
-        </div>
-      </div>
+      
 
       <!-- 내 마커 섹션 -->
       <div class="panel-section" id="myMarkerSection" style="display:none">
@@ -235,6 +213,25 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
       <button class="draw-btn" id="btnOverlay" onclick="openOverlayPanel()">🖼 이미지</button>
       <input type="color" id="drawColor" value="#ef4444" style="width:28px;height:28px;padding:2px;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:transparent;">
       <button class="draw-btn" onclick="clearMyDrawings()" style="color:#f87171;">🗑 삭제</button>
+    </div>
+
+    <!-- 그리기 저장 모달 -->
+    <div id="drawingModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1001;align-items:center;justify-content:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:340px;max-width:90vw;">
+        <div style="font-size:15px;font-weight:500;margin-bottom:16px;" id="drawingModalTitle">📏 그리기 저장</div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">제목</label>
+          <input id="drawingTitle" type="text" placeholder="예: 관심 구역" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;outline:none;">
+        </div>
+        <div style="margin-bottom:16px;">
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">메모</label>
+          <textarea id="drawingMemo" rows="3" placeholder="메모 입력 (선택)" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical;"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="closeDrawingModal()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;font-size:13px;">저장 안 함</button>
+          <button onclick="saveDrawing()" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:#0f1117;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;">저장</button>
+        </div>
+      </div>
     </div>
 
     <!-- 마커 메모 모달 -->
@@ -340,10 +337,10 @@ let layers = [];           // layers.json 데이터
 let layerData = {};        // 로드된 레이어 데이터
 let layerOverlays = {};    // 레이어별 지도 오버레이
 let layerVisible = {};     // 레이어 가시성
-let parcelOn = false, parcelMode = 'zone';
-let parcelMarkers = [], parcelCache = {}, loadedParcelTiles = new Set();
-let activeInfoWin = null;
-const PTILE = 0.02;
+
+
+
+
 
 /* ════════════════════════════════
    초기화
@@ -360,7 +357,7 @@ async function init() {
   map.addControl(mapTypeControl, kakao.maps.ControlPosition.TOPRIGHT);
   const zoomControl = new kakao.maps.ZoomControl();
   map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
-  kakao.maps.event.addListener(map, 'idle', () => { if(parcelOn) loadVisibleParcels(); });
+  
 
   // 로그인 상태 확인
   checkAuthState();
@@ -555,107 +552,17 @@ function closeDetail() {
 /* ════════════════════════════════
    필지 레이어
 ════════════════════════════════ */
-function getParcelColor(p) {
-  if (parcelMode === 'zone') return ZONE_COLOR[p[3]] || '#94a3b8';
-  if (parcelMode === 'usage') {
-    for (const [k,v] of Object.entries(USAGE_COLOR)) if ((p[4]||'').includes(k)) return v;
-    return '#94a3b8';
-  }
-  for (const [k,v] of Object.entries(JIBUN_COLOR)) if ((p[1]||'').includes(k)) return v;
-  return '#94a3b8';
-}
 
-function toggleParcel() {
-  parcelOn = !parcelOn;
-  const btn = document.getElementById('parcelToggleBtn');
-  const opts = document.getElementById('parcelOptions');
-  const leg = document.getElementById('parcelLegend');
-  btn.textContent = parcelOn ? 'ON' : 'OFF';
-  btn.className = 'tog-btn' + (parcelOn ? ' on' : '');
-  opts.className = 'parcel-options' + (parcelOn ? ' show' : '');
-  leg.style.display = parcelOn ? 'block' : 'none';
-  if (parcelOn) { updateParcelLegend(); loadVisibleParcels(); }
-  else { clearParcelMarkers(); loadedParcelTiles.clear(); }
-}
 
-function setParcelMode(mode, btn) {
-  parcelMode = mode;
-  document.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  updateParcelLegend();
-  if (parcelOn) { clearParcelMarkers(); loadedParcelTiles.clear(); loadVisibleParcels(); }
-}
 
-function updateParcelLegend() {
-  const colorMap = parcelMode==='zone' ? ZONE_COLOR : parcelMode==='usage' ? USAGE_COLOR : JIBUN_COLOR;
-  document.getElementById('parcelLegendItems').innerHTML =
-    Object.entries(colorMap).slice(0,8).map(([k,v])=>
-      `<div class="l-status"><div class="l-dot" style="background:${v}"></div>${k||'기타'}</div>`
-    ).join('');
-}
 
-function clearParcelMarkers() {
-  parcelMarkers.forEach(m => { if(m.setMap) m.setMap(null); });
-  parcelMarkers = [];
-}
 
-async function loadVisibleParcels() {
-  if (!map || !parcelOn) return;
-  const zoom = map.getLevel();
-  if (zoom > 4) {
-    clearParcelMarkers(); loadedParcelTiles.clear();
-    loading('필지: 더 확대하면 표시됩니다'); setTimeout(()=>loading(''), 2000);
-    return;
-  }
-  const bounds = map.getBounds(); if (!bounds) return;
-  const sw = bounds.getSouthWest(), ne = bounds.getNorthEast();
-  const needed = new Set();
-  for (let la=Math.floor(sw.lat()/PTILE)*PTILE; la<=ne.lat()+PTILE; la=+(la+PTILE).toFixed(2))
-    for (let ln=Math.floor(sw.lng()/PTILE)*PTILE; ln<=ne.lng()+PTILE; ln=+(ln+PTILE).toFixed(2))
-      needed.add(`${la.toFixed(2)}_${ln.toFixed(2)}`);
 
-  parcelMarkers = parcelMarkers.filter(m => {
-    if (!needed.has(m._tile)) { m.setMap(null); return false; } return true;
-  });
-  const cur = new Set(parcelMarkers.map(m => m._tile));
 
-  for (const tk of needed) {
-    if (cur.has(tk)) continue;
-    let data = parcelCache[tk];
-    if (!data) {
-      try {
-        const res = await fetch(GITHUB_RAW + `data/parcels/${tk}.json`);
-        if (!res.ok) { loadedParcelTiles.add(tk); continue; }
-        data = await res.json();
-        parcelCache[tk] = data;
-      } catch { loadedParcelTiles.add(tk); continue; }
-    }
-    const zoom2 = map.getLevel();
-    const sz = zoom2<=2?8:zoom2<=3?7:zoom2<=4?6:5;
-    data.forEach(p => {
-      const color = getParcelColor(p);
-      const pos = new kakao.maps.LatLng(p[6], p[7]);
-      const el = document.createElement('div');
-      el.style.cssText = `width:${sz}px;height:${sz}px;border-radius:50%;background:${color};border:1px solid rgba(255,255,255,0.6);cursor:pointer;opacity:0.85`;
-      const ov = new kakao.maps.CustomOverlay({position:pos, content:el, zIndex:2});
-      ov.setMap(map);
-      ov._tile = tk;
-      el.addEventListener('click', () => {
-        if (activeInfoWin) { activeInfoWin.setMap(null); activeInfoWin = null; }
-        const iEl = document.createElement('div');
-        iEl.style.cssText = 'font-size:12px;line-height:1.9;color:#111;min-width:200px;padding:8px 10px;background:#fff;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.2)';
-        iEl.innerHTML = `<div style="font-weight:700;font-size:13px;margin-bottom:4px">${p[0]}</div><div>지목: <b>${p[1]||'-'}</b> | 면적: <b>${p[2].toLocaleString()}㎡</b></div><div>용도지역: <b>${p[3]||'-'}</b></div><div>이용상황: <b>${p[4]||'-'}</b></div><div>공시지가: <b>${p[5]?p[5].toLocaleString()+'원/㎡':'-'}</b></div><div style="text-align:right;margin-top:4px"><span onclick="this.closest('.kakao-iw-wrap').remove()" style="cursor:pointer;color:#888;font-size:11px">닫기 ✕</span></div>`;
-        const wrap = document.createElement('div');
-        wrap.className = 'kakao-iw-wrap';
-        wrap.appendChild(iEl);
-        activeInfoWin = new kakao.maps.CustomOverlay({position:pos, content:wrap, zIndex:10, yAnchor:1.3});
-        activeInfoWin.setMap(map);
-      });
-      parcelMarkers.push(ov);
-    });
-    loadedParcelTiles.add(tk);
-  }
-}
+
+
+
+
 
 /* ════════════════════════════════
    그리기 기능
@@ -681,8 +588,14 @@ function setDrawMode(mode) {
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
   drawingPath = [];
 
-  if (mode === 'select') { map.setDraggable(true); map.setCursor(''); }
-  else { map.setDraggable(false); map.setCursor('crosshair'); }
+  if (mode === 'select') {
+    map.setDraggable(true);
+    map.setCursor('');
+    // 선택 모드: 아무 그리기 이벤트 없음 - 자유 이동
+    return;
+  }
+  map.setDraggable(false);
+  map.setCursor('crosshair');
 
   if (mode === 'marker') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => openMarkerModal(e.latLng));
@@ -734,10 +647,12 @@ function finalizeLine() {
   });
   line.setMap(map);
   const idx = myDrawings.length;
+  const savedPath = [...drawingPath];
   myDrawings.push(line);
   kakao.maps.event.addListener(line, 'click', e => showMyDrawingInfo(e.latLng, '선', idx));
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
   clearDrawingDots(); drawingPath = [];
+  openDrawingModal('line', color, savedPath, idx);
 }
 
 function finalizePolygon() {
@@ -747,10 +662,13 @@ function finalizePolygon() {
   });
   poly.setMap(map);
   const idx = myDrawings.length;
+  const savedPath = [...drawingPath];
   myDrawings.push(poly);
   kakao.maps.event.addListener(poly, 'click', e => showMyDrawingInfo(e.latLng, '영역', idx));
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
   clearDrawingDots(); drawingPath = [];
+  // 저장 모달
+  openDrawingModal('polygon', color, savedPath, idx);
 }
 
 // 번호 점 표시 + 드래그로 수정
@@ -840,6 +758,52 @@ function clearMyDrawings() {
   myDrawings.forEach(o => { if(o && o.setMap) o.setMap(null); });
   myDrawings = [];
   closeMyInfo();
+}
+
+/* ════════════════════════════════
+   그리기 저장
+════════════════════════════════ */
+let pendingDrawing = null; // {type, color, path, idx}
+
+function openDrawingModal(type, color, path, idx) {
+  pendingDrawing = { type, color, path, idx };
+  document.getElementById('drawingTitle').value = '';
+  document.getElementById('drawingMemo').value = '';
+  document.getElementById('drawingModalTitle').textContent =
+    type === 'polygon' ? '⬡ 영역 저장' : '📏 선 저장';
+  document.getElementById('drawingModal').style.display = 'flex';
+  setTimeout(() => document.getElementById('drawingTitle').focus(), 100);
+}
+
+function closeDrawingModal() {
+  document.getElementById('drawingModal').style.display = 'none';
+  pendingDrawing = null;
+}
+
+async function saveDrawing() {
+  if (!pendingDrawing) return;
+  if (!window._sb) { closeDrawingModal(); return; }
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) { alert('로그인이 필요해요'); closeDrawingModal(); return; }
+
+  const title = document.getElementById('drawingTitle').value.trim() ||
+    (pendingDrawing.type === 'polygon' ? '영역' : '선');
+  const memo = document.getElementById('drawingMemo').value;
+  const coords = pendingDrawing.path.map(ll => [ll.getLat(), ll.getLng()]);
+  const midIdx = Math.floor(coords.length / 2);
+
+  const { error } = await window._sb.from('markers').insert({
+    user_id: session.user.id,
+    title: `[${pendingDrawing.type === 'polygon' ? '영역' : '선'}] ${title}`,
+    content: memo ? `${memo}\n좌표수: ${coords.length}` : `좌표수: ${coords.length}`,
+    color: pendingDrawing.color,
+    lat: coords[midIdx][0],
+    lng: coords[midIdx][1]
+  });
+
+  if (error) { alert('저장 실패: ' + error.message); return; }
+  closeDrawingModal();
+  loadMyMarkers();
 }
 
 /* ════════════════════════════════
