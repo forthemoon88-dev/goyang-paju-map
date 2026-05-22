@@ -672,63 +672,41 @@ let draggingDotIdx = -1;
 function setDrawMode(mode) {
   drawMode = mode;
   document.querySelectorAll('.draw-btn').forEach(b => b.classList.remove('active'));
-  const btnId = 'btn' + mode.charAt(0).toUpperCase() + mode.slice(1);
-  const btn = document.getElementById(btnId);
+  const btn = document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1));
   if (btn) btn.classList.add('active');
 
-  if (drawClickListener) {
-    kakao.maps.event.removeListener(map, 'click', drawClickListener);
-    drawClickListener = null;
-  }
-  if (drawRightClickListener) {
-    kakao.maps.event.removeListener(map, 'rightclick', drawRightClickListener);
-    drawRightClickListener = null;
-  }
+  if (drawClickListener) { kakao.maps.event.removeListener(map, 'click', drawClickListener); drawClickListener = null; }
+  if (drawRightClickListener) { kakao.maps.event.removeListener(map, 'rightclick', drawRightClickListener); drawRightClickListener = null; }
   clearDrawingDots();
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
   drawingPath = [];
 
-  if (mode === 'select') {
-    map.setDraggable(true);
-    map.setCursor('');
-  } else {
-    map.setDraggable(false);
-    map.setCursor('crosshair');
-  }
+  if (mode === 'select') { map.setDraggable(true); map.setCursor(''); }
+  else { map.setDraggable(false); map.setCursor('crosshair'); }
 
   if (mode === 'marker') {
-    drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
-      openMarkerModal(e.latLng);
-    });
+    drawClickListener = kakao.maps.event.addListener(map, 'click', e => openMarkerModal(e.latLng));
 
   } else if (mode === 'line') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
+      const idx = drawingPath.length;
       drawingPath.push(e.latLng);
-      addDrawingDot(e.latLng, drawingPath.length - 1);
+      addDrawingDot(e.latLng, idx);
       updateDrawingOverlay();
     });
     drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', e => {
-      if (drawMode !== 'line' || drawingPath.length < 2) return;
-      finalizeLine();
+      if (drawingPath.length >= 2) finalizeLine();
     });
 
   } else if (mode === 'polygon') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
+      const idx = drawingPath.length;
       drawingPath.push(e.latLng);
-      addDrawingDot(e.latLng, drawingPath.length);
-      if (drawingPath.length >= 3) {
-        if (drawingOverlay) drawingOverlay.setMap(null);
-        const color = document.getElementById('drawColor').value;
-        drawingOverlay = new kakao.maps.Polygon({
-          path: [...drawingPath], strokeColor: color,
-          strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
-        });
-        drawingOverlay.setMap(map);
-      }
+      addDrawingDot(e.latLng, idx);
+      updateDrawingOverlay();
     });
     drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', e => {
-      if (drawMode !== 'polygon' || drawingPath.length < 3) return;
-      finalizePolygon();
+      if (drawingPath.length >= 3) finalizePolygon();
     });
   }
 }
@@ -738,14 +716,12 @@ function updateDrawingOverlay() {
   const color = document.getElementById('drawColor').value;
   if (drawMode === 'line' && drawingPath.length >= 2) {
     drawingOverlay = new kakao.maps.Polyline({
-      path: [...drawingPath], strokeColor: color,
-      strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
+      path: [...drawingPath], strokeColor: color, strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
     });
     drawingOverlay.setMap(map);
   } else if (drawMode === 'polygon' && drawingPath.length >= 3) {
     drawingOverlay = new kakao.maps.Polygon({
-      path: [...drawingPath], strokeColor: color,
-      strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
+      path: [...drawingPath], strokeColor: color, strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
     });
     drawingOverlay.setMap(map);
   }
@@ -754,8 +730,7 @@ function updateDrawingOverlay() {
 function finalizeLine() {
   const color = document.getElementById('drawColor').value;
   const line = new kakao.maps.Polyline({
-    path: [...drawingPath], strokeColor: color,
-    strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
+    path: [...drawingPath], strokeColor: color, strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
   });
   line.setMap(map);
   const idx = myDrawings.length;
@@ -768,8 +743,7 @@ function finalizeLine() {
 function finalizePolygon() {
   const color = document.getElementById('drawColor').value;
   const poly = new kakao.maps.Polygon({
-    path: [...drawingPath], strokeColor: color,
-    strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
+    path: [...drawingPath], strokeColor: color, strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
   });
   poly.setMap(map);
   const idx = myDrawings.length;
@@ -779,61 +753,47 @@ function finalizePolygon() {
   clearDrawingDots(); drawingPath = [];
 }
 
-// 클릭 위치 점 표시 (드래그로 수정 가능)
+// 번호 점 표시 + 드래그로 수정
 function addDrawingDot(latLng, idx) {
+  const color = document.getElementById('drawColor').value;
   const el = document.createElement('div');
-  el.style.cssText = `
-    width:22px;height:22px;border-radius:50%;
-    background:${document.getElementById('drawColor').value};
-    border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);
-    display:flex;align-items:center;justify-content:center;
-    font-size:9px;font-weight:700;color:#fff;
-    transform:translate(-11px,-11px);cursor:grab;
-    font-family:sans-serif;user-select:none;`;
+  el.style.cssText = `width:22px;height:22px;border-radius:50%;background:${color};border:2px solid #fff;
+    box-shadow:0 1px 4px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;
+    font-size:9px;font-weight:700;color:#fff;transform:translate(-11px,-11px);
+    cursor:grab;font-family:sans-serif;user-select:none;`;
   el.textContent = idx + 1;
 
-  // 드래그로 점 이동
   el.addEventListener('mousedown', ev => {
     ev.stopPropagation();
     draggingDotIdx = idx;
     el.style.cursor = 'grabbing';
-    el.style.transform = 'translate(-11px,-11px) scale(1.2)';
+    const mapEl = document.getElementById('gmap');
 
-    const onMouseMove = ev2 => {
+    const onMove = ev2 => {
       if (draggingDotIdx < 0) return;
-      const mapEl = document.getElementById('gmap');
       const rect = mapEl.getBoundingClientRect();
-      const x = ev2.clientX - rect.left;
-      const y = ev2.clientY - rect.top;
       const proj = map.getProjection();
-      const point = new kakao.maps.Point(x, y);
-      const newLatLng = proj.coordsFromContainerPoint(point);
-      // 경로 업데이트
+      const newLatLng = proj.coordsFromContainerPoint(
+        new kakao.maps.Point(ev2.clientX - rect.left, ev2.clientY - rect.top)
+      );
       drawingPath[draggingDotIdx] = newLatLng;
-      // 점 오버레이 위치 업데이트
       drawingDots[draggingDotIdx].setPosition(newLatLng);
-      // 미리보기 업데이트
       updateDrawingOverlay();
     };
-
-    const onMouseUp = () => {
+    const onUp = () => {
       draggingDotIdx = -1;
       el.style.cursor = 'grab';
-      el.style.transform = 'translate(-11px,-11px) scale(1)';
-      document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
     };
-
-    document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('mouseup', onMouseUp);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
   });
 
   const ov = new kakao.maps.CustomOverlay({ position: latLng, content: el, zIndex: 15 });
   ov.setMap(map);
   drawingDots.push(ov);
 }
-
-
 
 function clearDrawingDots() {
   drawingDots.forEach(o => o.setMap(null));
@@ -852,26 +812,15 @@ function placeMyMarker(latLng) {
   el.addEventListener('click', () => showMyDrawingInfo(latLng, '마커', idx));
 }
 
-function addDrawingClickHandler(overlay, type) {
-  kakao.maps.event.addListener(overlay, 'click', e => {
-    showMyDrawingInfo(e.latLng, type, overlay);
-  });
-}
-
 let myInfoWin = null;
 function showMyDrawingInfo(pos, type, idx) {
   if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; }
   const el = document.createElement('div');
   el.className = 'my-marker-info';
-  el.innerHTML = `
-    <b>${type}</b><br>
-    위도: ${pos.getLat().toFixed(5)}<br>
-    경도: ${pos.getLng().toFixed(5)}<br>
+  el.innerHTML = `<b>${type}</b><br>위도: ${pos.getLat().toFixed(5)}<br>경도: ${pos.getLng().toFixed(5)}<br>
     <div style="display:flex;gap:6px;margin-top:6px">
-      <button onclick="deleteMyDrawing(${idx})"
-        style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #f87171;background:#fff;color:#f87171;cursor:pointer">삭제</button>
-      <button onclick="closeMyInfo()"
-        style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer">닫기</button>
+      <button onclick="deleteMyDrawing(${idx})" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #f87171;background:#fff;color:#f87171;cursor:pointer">삭제</button>
+      <button onclick="closeMyInfo()" style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer">닫기</button>
     </div>`;
   const wrap = document.createElement('div');
   wrap.appendChild(el);
@@ -879,9 +828,7 @@ function showMyDrawingInfo(pos, type, idx) {
   myInfoWin.setMap(map);
 }
 
-function closeMyInfo() {
-  if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; }
-}
+function closeMyInfo() { if (myInfoWin) { myInfoWin.setMap(null); myInfoWin = null; } }
 
 function deleteMyDrawing(idx) {
   if (myDrawings[idx]) { myDrawings[idx].setMap(null); myDrawings[idx] = null; }
