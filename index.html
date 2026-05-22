@@ -186,6 +186,30 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
         </div>
       </div>
 
+      <!-- 내 마커 섹션 -->
+      <div class="panel-section" id="myMarkerSection" style="display:none">
+        <div class="panel-title" onclick="toggleSection('myMarkerBody')">
+          <span>📍</span> 내 마커
+          <span class="panel-arrow" id="myMarkerBodyArrow">▶</span>
+          <span class="layer-count" id="markerCount" style="margin-left:4px">0</span>
+        </div>
+        <div class="panel-body" id="myMarkerBody">
+          <div id="myMarkerList" style="max-height:200px;overflow-y:auto;"></div>
+        </div>
+      </div>
+
+      <!-- 내 이미지 오버레이 섹션 -->
+      <div class="panel-section" id="myOverlaySection" style="display:none">
+        <div class="panel-title" onclick="toggleSection('myOverlayBody')">
+          <span>🖼</span> 내 이미지 오버레이
+          <span class="panel-arrow" id="myOverlayBodyArrow">▶</span>
+          <span class="layer-count" id="overlayCount" style="margin-left:4px">0</span>
+        </div>
+        <div class="panel-body" id="myOverlayBody">
+          <div id="mySidebarOverlayList" style="max-height:200px;overflow-y:auto;"></div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -216,7 +240,7 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
     <!-- 마커 메모 모달 -->
     <div id="markerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:340px;max-width:90vw;">
-        <div style="font-size:15px;font-weight:500;margin-bottom:16px;">📍 마커 정보 입력</div>
+        <div style="font-size:15px;font-weight:500;margin-bottom:16px;" class="modal-title">📍 마커 정보 입력</div>
         <div style="margin-bottom:12px;">
           <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">제목 *</label>
           <input id="markerTitle" type="text" placeholder="예: 운정3지구 예정지" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;outline:none;">
@@ -803,6 +827,8 @@ function openMarkerModal(latLng) {
 function closeMarkerModal() {
   document.getElementById('markerModal').style.display = 'none';
   pendingMarkerLatLng = null;
+  editingMarkerId = null;
+  document.querySelector('#markerModal .modal-title').textContent = '📍 마커 정보 입력';
 }
 
 async function saveMarker() {
@@ -889,8 +915,103 @@ async function loadMyMarkers() {
   if (!session) return;
   myMarkerOverlays.forEach(o => o.setMap(null));
   myMarkerOverlays = [];
-  const { data } = await window._sb.from('markers').select('*').eq('user_id', session.user.id);
-  data?.forEach(m => renderMyMarker(m));
+  const { data } = await window._sb.from('markers').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+  if (!data) return;
+
+  // 사이드바 섹션 표시
+  document.getElementById('myMarkerSection').style.display = 'block';
+  document.getElementById('markerCount').textContent = data.length;
+
+  // 지도에 렌더
+  data.forEach(m => renderMyMarker(m));
+
+  // 사이드바 목록 렌더
+  const listEl = document.getElementById('myMarkerList');
+  if (!data.length) {
+    listEl.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text3)">마커 없음</div>';
+    return;
+  }
+  listEl.innerHTML = data.map(m => `
+    <div class="layer-item" style="padding-left:10px" id="marker-item-${m.id}">
+      <div style="width:8px;height:8px;border-radius:50%;background:${m.color};flex-shrink:0;"></div>
+      <span class="layer-name" style="cursor:pointer" onclick="focusMarker('${m.id}',${m.lat},${m.lng})">${m.title}</span>
+      <span class="layer-eye" onclick="toggleMarkerVisible('${m.id}')" title="표시/숨기기">👁</span>
+      <span class="layer-eye" onclick="openEditMarkerModal('${m.id}')" title="수정">✏</span>
+      <span class="layer-eye" style="color:#f87171" onclick="deleteMarker('${m.id}')" title="삭제">🗑</span>
+    </div>`).join('');
+
+  // 마커 데이터 캐시
+  window._markerData = {};
+  data.forEach(m => { window._markerData[m.id] = m; });
+}
+
+function focusMarker(id, lat, lng) {
+  map.setCenter(new kakao.maps.LatLng(lat, lng));
+  map.setLevel(3);
+  const ov = myMarkerOverlays.find(o => o._markerId === id);
+  const m = window._markerData?.[id];
+  if (ov && m) showMarkerInfo(m, ov);
+}
+
+let hiddenMarkers = new Set();
+function toggleMarkerVisible(id) {
+  const ov = myMarkerOverlays.find(o => o._markerId === id);
+  if (!ov) return;
+  if (hiddenMarkers.has(id)) {
+    hiddenMarkers.delete(id);
+    ov.setMap(map);
+    document.querySelector(`#marker-item-${id} .layer-eye`).textContent = '👁';
+  } else {
+    hiddenMarkers.add(id);
+    ov.setMap(null);
+    document.querySelector(`#marker-item-${id} .layer-eye`).textContent = '🚫';
+  }
+}
+
+// 마커 수정 모달
+let editingMarkerId = null;
+function openEditMarkerModal(id) {
+  const m = window._markerData?.[id];
+  if (!m) return;
+  editingMarkerId = id;
+  document.getElementById('markerTitle').value = m.title;
+  document.getElementById('markerContent').value = m.content || '';
+  markerColor = m.color;
+  document.querySelectorAll('.mcolor').forEach(e => {
+    e.style.border = e.style.background === m.color ? '2px solid #fff' : '2px solid transparent';
+  });
+  pendingMarkerLatLng = new kakao.maps.LatLng(m.lat, m.lng);
+  // 모달 제목 변경
+  document.querySelector('#markerModal .modal-title').textContent = '📍 마커 수정';
+  document.getElementById('markerModal').style.display = 'flex';
+}
+
+async function saveMarker() {
+  const title = document.getElementById('markerTitle').value.trim();
+  if (!title) { alert('제목을 입력해주세요'); return; }
+  if (!window._sb) { alert('로그인이 필요해요'); closeMarkerModal(); return; }
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) { alert('로그인이 필요해요'); closeMarkerModal(); return; }
+
+  if (editingMarkerId) {
+    // 수정
+    await window._sb.from('markers').update({
+      title, content: document.getElementById('markerContent').value, color: markerColor
+    }).eq('id', editingMarkerId).eq('user_id', session.user.id); // 본인만 수정 가능
+    editingMarkerId = null;
+  } else {
+    // 신규
+    if (!pendingMarkerLatLng) return;
+    await window._sb.from('markers').insert({
+      user_id: session.user.id, title,
+      content: document.getElementById('markerContent').value,
+      color: markerColor,
+      lat: pendingMarkerLatLng.getLat(), lng: pendingMarkerLatLng.getLng()
+    });
+  }
+
+  closeMarkerModal();
+  loadMyMarkers();
 }
 
 /* ════════════════════════════════
@@ -1014,6 +1135,7 @@ function renderOverlayOnMap(o) {
   const center = new kakao.maps.LatLng((o.sw_lat + o.ne_lat) / 2, (o.sw_lng + o.ne_lng) / 2);
   const ov = new kakao.maps.CustomOverlay({ position: center, content: wrap, zIndex: 1 });
   ov.setMap(map);
+  ov._overlayId = o.id;
   overlayPreviewList.push(ov);
 }
 
@@ -1021,19 +1143,163 @@ async function loadMyOverlays() {
   if (!window._sb) return;
   const { data: { session } } = await window._sb.auth.getSession();
   if (!session) return;
+
   const { data } = await window._sb.from('image_overlays').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
-  const listEl = document.getElementById('myOverlayList');
-  if (!data?.length) { listEl.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">저장된 오버레이 없음</div>'; return; }
-  listEl.innerHTML = data.map(o => `
-    <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--border);">
+
+  // 사이드바 섹션 표시
+  document.getElementById('myOverlaySection').style.display = data?.length ? 'block' : 'none';
+  document.getElementById('overlayCount').textContent = data?.length || 0;
+
+  // 패널 내 목록
+  const panelList = document.getElementById('myOverlayList');
+  // 사이드바 목록
+  const sidebarList = document.getElementById('mySidebarOverlayList');
+
+  if (!data?.length) {
+    panelList.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">저장된 오버레이 없음</div>';
+    sidebarList.innerHTML = '<div style="padding:10px 12px;font-size:12px;color:var(--text3)">오버레이 없음</div>';
+    return;
+  }
+
+  // 캐시
+  window._overlayData = {};
+  data.forEach(o => { window._overlayData[o.id] = o; });
+
+  const itemHtml = (o) => `
+    <div class="layer-item" style="padding-left:10px" id="overlay-item-${o.id}">
+      <span style="font-size:14px;">🖼</span>
+      <span class="layer-name" style="cursor:pointer" onclick="focusOverlay('${o.id}')">${o.title}</span>
+      <span class="layer-eye" onclick="toggleOverlayVisible('${o.id}')" title="표시/숨기기">👁</span>
+      <span class="layer-eye" onclick="openEditOverlayPanel('${o.id}')" title="수정">✏</span>
+      <span class="layer-eye" style="color:#f87171" onclick="deleteOverlay('${o.id}')" title="삭제">🗑</span>
+    </div>`;
+
+  panelList.innerHTML = data.map(o => `
+    <div style="display:flex;align-items:center;gap:6px;padding:5px 4px;border-top:1px solid var(--border);">
       <span style="font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.title}</span>
-      <button onclick="deleteOverlay('${o.id}')" style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;cursor:pointer;">삭제</button>
+      <button onclick="openEditOverlayPanel('${o.id}')" style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;">수정</button>
+      <button onclick="deleteOverlay('${o.id}')" style="font-size:10px;padding:2px 5px;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;cursor:pointer;">삭제</button>
     </div>`).join('');
+
+  sidebarList.innerHTML = data.map(o => itemHtml(o)).join('');
+
+  // 지도에 렌더
+  overlayPreviewList.forEach(o => { if(o.setMap) o.setMap(null); });
+  overlayPreviewList = [];
+  data.forEach(o => {
+    const { data: urlData } = window._sb.storage.from('overlay-images').getPublicUrl(o.storage_path);
+    renderOverlayOnMap({ ...o, url: urlData.publicUrl });
+  });
+}
+
+let hiddenOverlays = new Set();
+function toggleOverlayVisible(id) {
+  const idx = overlayPreviewList.findIndex(o => o._overlayId === id);
+  if (idx < 0) return;
+  const ov = overlayPreviewList[idx];
+  const eyeEl = document.querySelectorAll(`#overlay-item-${id} .layer-eye`)[0];
+  if (hiddenOverlays.has(id)) {
+    hiddenOverlays.delete(id);
+    ov.setMap(map);
+    if (eyeEl) eyeEl.textContent = '👁';
+  } else {
+    hiddenOverlays.add(id);
+    ov.setMap(null);
+    if (eyeEl) eyeEl.textContent = '🚫';
+  }
+}
+
+function focusOverlay(id) {
+  const o = window._overlayData?.[id];
+  if (!o) return;
+  const center = new kakao.maps.LatLng((o.sw_lat + o.ne_lat) / 2, (o.sw_lng + o.ne_lng) / 2);
+  map.setCenter(center);
+  map.setLevel(4);
+}
+
+// 오버레이 수정 패널
+let editingOverlayId = null;
+function openEditOverlayPanel(id) {
+  const o = window._overlayData?.[id];
+  if (!o) return;
+  editingOverlayId = id;
+  document.getElementById('overlayPanel').style.display = 'block';
+  document.getElementById('overlayTitle').value = o.title;
+  document.getElementById('overlayOpacity').value = Math.round(o.opacity * 100);
+  document.getElementById('opacityVal').textContent = Math.round(o.opacity * 100) + '%';
+  document.getElementById('overlayDropZone').innerHTML = `<div style="font-size:12px;color:var(--accent)">📎 저장된 이미지 (위치 재지정 가능)</div>`;
+  overlayPoints = [];
+  overlayFile = null;
+  // 수정 모드 안내
+  document.getElementById('overlayStatus').textContent = '위치를 재지정하려면 지도에서 클릭하세요 (선택사항)';
+  document.getElementById('overlayStatus').style.display = 'block';
+  document.getElementById('overlaySubmitBtn').disabled = false;
+  document.getElementById('overlaySubmitBtn').style.opacity = '1';
+  document.getElementById('overlaySubmitBtn').textContent = '수정 저장';
+}
+
+async function saveOverlay() {
+  if (!window._sb) { alert('로그인이 필요해요'); return; }
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) { alert('로그인이 필요해요'); return; }
+
+  // 수정 모드
+  if (editingOverlayId) {
+    const updateData = {
+      title: document.getElementById('overlayTitle').value || '이미지 오버레이',
+      opacity: document.getElementById('overlayOpacity').value / 100
+    };
+    // 위치 재지정 시
+    if (overlayPoints.length === 2) {
+      updateData.sw_lat = overlayPoints[0].getLat();
+      updateData.sw_lng = overlayPoints[0].getLng();
+      updateData.ne_lat = overlayPoints[1].getLat();
+      updateData.ne_lng = overlayPoints[1].getLng();
+    }
+    await window._sb.from('image_overlays').update(updateData)
+      .eq('id', editingOverlayId).eq('user_id', session.user.id); // 본인만 수정
+    editingOverlayId = null;
+    overlayPoints = [];
+    document.getElementById('overlaySubmitBtn').textContent = '위치 지정 후 저장';
+    updateOverlayStatus('✅ 수정 완료!');
+    closeOverlayPanel();
+    loadMyOverlays();
+    return;
+  }
+
+  // 신규 저장
+  if (!overlayFile || overlayPoints.length < 2) { alert('이미지와 위치를 먼저 지정해주세요'); return; }
+  updateOverlayStatus('업로드 중...');
+  const ext = overlayFile.name.split('.').pop();
+  const path = `${session.user.id}/${Date.now()}.${ext}`;
+  const { error: upErr } = await window._sb.storage.from('overlay-images').upload(path, overlayFile);
+  if (upErr) { alert('업로드 실패: ' + upErr.message); return; }
+  const { data: urlData } = window._sb.storage.from('overlay-images').getPublicUrl(path);
+  const sw = overlayPoints[0], ne = overlayPoints[1];
+  await window._sb.from('image_overlays').insert({
+    user_id: session.user.id,
+    title: document.getElementById('overlayTitle').value || '이미지 오버레이',
+    storage_path: path,
+    sw_lat: sw.getLat(), sw_lng: sw.getLng(),
+    ne_lat: ne.getLat(), ne_lng: ne.getLng(),
+    opacity: document.getElementById('overlayOpacity').value / 100
+  });
+  renderOverlayOnMap({ title: document.getElementById('overlayTitle').value, url: urlData.publicUrl,
+    sw_lat: sw.getLat(), sw_lng: sw.getLng(), ne_lat: ne.getLat(), ne_lng: ne.getLng(),
+    opacity: document.getElementById('overlayOpacity').value / 100 });
+  updateOverlayStatus('✅ 저장 완료!');
+  overlayFile = null; overlayPoints = [];
+  document.getElementById('overlaySubmitBtn').disabled = true;
+  document.getElementById('overlaySubmitBtn').style.opacity = '.5';
+  loadMyOverlays();
 }
 
 async function deleteOverlay(id) {
   if (!confirm('오버레이를 삭제할까요?')) return;
-  await window._sb.from('image_overlays').delete().eq('id', id);
+  if (!window._sb) return;
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) return;
+  await window._sb.from('image_overlays').delete().eq('id', id).eq('user_id', session.user.id); // 본인만 삭제
   loadMyOverlays();
 }
 
