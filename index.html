@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>고양·파주 도시계획 지도</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e7bab8ddea307ac3c4f861f4a2ff00cc&libraries=services"></script>
+<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=e7bab8ddea307ac3c4f861f4a2ff00cc&libraries=services&autoload=false"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap');
 :root{
@@ -1377,8 +1377,10 @@ function initDraggable(el) {
    시작
 ════════════════════════════════ */
 window.addEventListener('load', () => {
-  init();
-  initDraggable(document.getElementById('mapLegend'));
+  kakao.maps.load(() => {
+    init();
+    initDraggable(document.getElementById('mapLegend'));
+  });
 });
 </script>
 </body>
