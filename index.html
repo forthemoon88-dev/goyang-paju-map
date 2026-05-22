@@ -808,6 +808,7 @@ function clearMyDrawings() {
 let pendingMarkerLatLng = null;
 let markerColor = '#ef4444';
 let myMarkerOverlays = [];
+let editingMarkerId = null;
 
 function selectMarkerColor(color, el) {
   markerColor = color;
@@ -817,10 +818,11 @@ function selectMarkerColor(color, el) {
 
 function openMarkerModal(latLng) {
   pendingMarkerLatLng = latLng;
+  editingMarkerId = null;
   document.getElementById('markerTitle').value = '';
   document.getElementById('markerContent').value = '';
-  const modal = document.getElementById('markerModal');
-  modal.style.display = 'flex';
+  document.querySelector('#markerModal .modal-title').textContent = '📍 마커 정보 입력';
+  document.getElementById('markerModal').style.display = 'flex';
   setTimeout(() => document.getElementById('markerTitle').focus(), 100);
 }
 
@@ -834,25 +836,36 @@ function closeMarkerModal() {
 async function saveMarker() {
   const title = document.getElementById('markerTitle').value.trim();
   if (!title) { alert('제목을 입력해주세요'); return; }
-  if (!pendingMarkerLatLng) return;
   if (!window._sb) { alert('로그인이 필요해요'); closeMarkerModal(); return; }
-
   const { data: { session } } = await window._sb.auth.getSession();
   if (!session) { alert('로그인이 필요해요'); closeMarkerModal(); return; }
 
-  const { data, error } = await window._sb.from('markers').insert({
-    user_id: session.user.id,
-    title,
-    content: document.getElementById('markerContent').value,
-    color: markerColor,
-    lat: pendingMarkerLatLng.getLat(),
-    lng: pendingMarkerLatLng.getLng()
-  }).select().single();
-
-  if (error) { alert('저장 실패: ' + error.message); return; }
-
-  renderMyMarker(data);
-  closeMarkerModal();
+  if (editingMarkerId) {
+    // 수정 모드
+    const { error } = await window._sb.from('markers').update({
+      title,
+      content: document.getElementById('markerContent').value,
+      color: markerColor
+    }).eq('id', editingMarkerId).eq('user_id', session.user.id);
+    if (error) { alert('수정 실패: ' + error.message); return; }
+    closeMarkerModal();
+    loadMyMarkers();
+  } else {
+    // 신규 저장
+    if (!pendingMarkerLatLng) { alert('지도에서 위치를 선택해주세요'); return; }
+    const { data, error } = await window._sb.from('markers').insert({
+      user_id: session.user.id,
+      title,
+      content: document.getElementById('markerContent').value,
+      color: markerColor,
+      lat: pendingMarkerLatLng.getLat(),
+      lng: pendingMarkerLatLng.getLng()
+    }).select().single();
+    if (error) { alert('저장 실패: ' + error.message); return; }
+    renderMyMarker(data);
+    closeMarkerModal();
+    loadMyMarkers();
+  }
 }
 
 function renderMyMarker(m) {
@@ -894,10 +907,16 @@ function closeMarkerInfo() {
 
 async function deleteMarker(id) {
   if (!confirm('마커를 삭제할까요?')) return;
-  await window._sb.from('markers').delete().eq('id', id);
+  if (!window._sb) return;
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) return;
+  const { error } = await window._sb.from('markers').delete()
+    .eq('id', id).eq('user_id', session.user.id);
+  if (error) { alert('삭제 실패: ' + error.message); return; }
   const idx = myMarkerOverlays.findIndex(o => o._markerId === id);
   if (idx >= 0) { myMarkerOverlays[idx].setMap(null); myMarkerOverlays.splice(idx, 1); }
   closeMarkerInfo();
+  loadMyMarkers();
 }
 
 async function editMarker(id) {
