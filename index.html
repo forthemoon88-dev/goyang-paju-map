@@ -359,6 +359,9 @@ async function init() {
   map.addControl(zoomControl, kakao.maps.ControlPosition.RIGHT);
   
 
+  kakao.maps.event.addListener(map, 'click', onMapClick);
+  kakao.maps.event.addListener(map, 'rightclick', onMapRightClick);
+
   // 로그인 상태 확인
   checkAuthState();
 
@@ -582,15 +585,6 @@ function setDrawMode(mode) {
   const btn = document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1));
   if (btn) btn.classList.add('active');
 
-  // 기존 리스너 완전 제거
-  if (drawClickListener) {
-    kakao.maps.event.removeListener(drawClickListener);
-    drawClickListener = null;
-  }
-  if (drawRightClickListener) {
-    kakao.maps.event.removeListener(drawRightClickListener);
-    drawRightClickListener = null;
-  }
   clearDrawingDots();
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
   drawingPath = [];
@@ -598,36 +592,28 @@ function setDrawMode(mode) {
   if (mode === 'select') {
     map.setDraggable(true);
     map.setCursor('');
-    return; // 선택 모드: 어떤 그리기도 없음
+  } else {
+    map.setDraggable(false);
+    map.setCursor('crosshair');
   }
-  map.setDraggable(false);
-  map.setCursor('crosshair');
+}
 
-  if (mode === 'marker') {
-    drawClickListener = kakao.maps.event.addListener(map, 'click', e => openMarkerModal(e.latLng));
-
-  } else if (mode === 'line') {
-    drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
-      const idx = drawingPath.length;
-      drawingPath.push(e.latLng);
-      addDrawingDot(e.latLng, idx);
-      updateDrawingOverlay();
-    });
-    drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', () => {
-      if (drawingPath.length >= 2) finalizeLine();
-    });
-
-  } else if (mode === 'polygon') {
-    drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
-      const idx = drawingPath.length;
-      drawingPath.push(e.latLng);
-      addDrawingDot(e.latLng, idx);
-      updateDrawingOverlay();
-    });
-    drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', () => {
-      if (drawingPath.length >= 3) finalizePolygon();
-    });
+// 단일 클릭 핸들러 - 항상 등록, drawMode로 분기
+function onMapClick(e) {
+  if (drawMode === 'select' || drawMode === 'image') return;
+  if (drawMode === 'marker') { openMarkerModal(e.latLng); return; }
+  if (drawMode === 'line' || drawMode === 'polygon') {
+    const idx = drawingPath.length;
+    drawingPath.push(e.latLng);
+    addDrawingDot(e.latLng, idx);
+    updateDrawingOverlay();
   }
+}
+
+// 단일 우클릭 핸들러
+function onMapRightClick() {
+  if (drawMode === 'line' && drawingPath.length >= 2) { finalizeLine(); return; }
+  if (drawMode === 'polygon' && drawingPath.length >= 3) { finalizePolygon(); return; }
 }
 
 function updateDrawingOverlay() {
