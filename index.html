@@ -661,10 +661,12 @@ async function loadVisibleParcels() {
    그리기 기능
 ════════════════════════════════ */
 let drawMode = 'select';
-let myDrawings = [];       // 내 그리기 오버레이
-let drawingPath = [];      // 현재 그리는 중인 좌표
-let drawingOverlay = null; // 임시 라인/폴리곤
+let myDrawings = [];
+let drawingPath = [];
+let drawingOverlay = null;
+let drawingDots = [];      // 클릭 위치 표시 점들
 let drawClickListener = null;
+let longPressTimer = null;
 
 function setDrawMode(mode) {
   drawMode = mode;
@@ -677,10 +679,10 @@ function setDrawMode(mode) {
     kakao.maps.event.removeListener(map, 'click', drawClickListener);
     drawClickListener = null;
   }
+  clearDrawingDots();
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
   drawingPath = [];
 
-  // 그리기 모드면 지도 드래그 비활성화
   if (mode === 'select') {
     map.setDraggable(true);
     map.setCursor('');
@@ -693,14 +695,15 @@ function setDrawMode(mode) {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
       openMarkerModal(e.latLng);
     });
+
   } else if (mode === 'line') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
       drawingPath.push(e.latLng);
+      addDrawingDot(e.latLng, drawingPath.length);
       if (drawingPath.length >= 2) {
         if (drawingOverlay) drawingOverlay.setMap(null);
         drawingOverlay = new kakao.maps.Polyline({
-          path: drawingPath,
-          strokeColor: document.getElementById('drawColor').value,
+          path: drawingPath, strokeColor: document.getElementById('drawColor').value,
           strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
         });
         drawingOverlay.setMap(map);
@@ -710,25 +713,28 @@ function setDrawMode(mode) {
       if (drawMode !== 'line' || drawingPath.length < 2) return;
       const color = document.getElementById('drawColor').value;
       const line = new kakao.maps.Polyline({
-        path: [...drawingPath],
-        strokeColor: color, strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
+        path: [...drawingPath], strokeColor: color,
+        strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
       });
       line.setMap(map);
+      const idx = myDrawings.length;
       myDrawings.push(line);
-      kakao.maps.event.addListener(line, 'click', e => showMyDrawingInfo(e.latLng, '선', myDrawings.length-1));
+      kakao.maps.event.addListener(line, 'click', e => showMyDrawingInfo(e.latLng, '선', idx));
       if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
+      clearDrawingDots();
       drawingPath = [];
     });
+
   } else if (mode === 'polygon') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
       drawingPath.push(e.latLng);
+      addDrawingDot(e.latLng, drawingPath.length);
       if (drawingPath.length >= 3) {
         if (drawingOverlay) drawingOverlay.setMap(null);
         const color = document.getElementById('drawColor').value;
         drawingOverlay = new kakao.maps.Polygon({
-          path: [...drawingPath],
-          strokeColor: color, strokeWeight: 2, strokeOpacity: .9,
-          fillColor: color, fillOpacity: .25
+          path: [...drawingPath], strokeColor: color,
+          strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
         });
         drawingOverlay.setMap(map);
       }
@@ -737,18 +743,72 @@ function setDrawMode(mode) {
       if (drawMode !== 'polygon' || drawingPath.length < 3) return;
       const color = document.getElementById('drawColor').value;
       const poly = new kakao.maps.Polygon({
-        path: [...drawingPath],
-        strokeColor: color, strokeWeight: 2, strokeOpacity: .9,
-        fillColor: color, fillOpacity: .25
+        path: [...drawingPath], strokeColor: color,
+        strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
       });
       poly.setMap(map);
       const idx = myDrawings.length;
       myDrawings.push(poly);
       kakao.maps.event.addListener(poly, 'click', e => showMyDrawingInfo(e.latLng, '영역', idx));
       if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
+      clearDrawingDots();
       drawingPath = [];
     });
   }
+}
+
+// 클릭 위치 점 표시
+function addDrawingDot(latLng, num) {
+  const el = document.createElement('div');
+  el.style.cssText = `
+    width:20px;height:20px;border-radius:50%;
+    background:${document.getElementById('drawColor').value};
+    border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);
+    display:flex;align-items:center;justify-content:center;
+    font-size:9px;font-weight:700;color:#fff;
+    transform:translate(-10px,-10px);cursor:pointer;
+    font-family:sans-serif;`;
+  el.textContent = num;
+  // 길게 누르면 마지막 점 삭제
+  el.addEventListener('mousedown', () => {
+    longPressTimer = setTimeout(() => {
+      undoLastPoint();
+    }, 600);
+  });
+  el.addEventListener('mouseup', () => clearTimeout(longPressTimer));
+  el.addEventListener('mouseleave', () => clearTimeout(longPressTimer));
+  const ov = new kakao.maps.CustomOverlay({ position: latLng, content: el, zIndex: 15 });
+  ov.setMap(map);
+  drawingDots.push(ov);
+}
+
+// 마지막 점 취소
+function undoLastPoint() {
+  if (drawingPath.length === 0) return;
+  drawingPath.pop();
+  const lastDot = drawingDots.pop();
+  if (lastDot) lastDot.setMap(null);
+  // 오버레이 업데이트
+  if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
+  if (drawingPath.length >= 2 && drawMode === 'line') {
+    drawingOverlay = new kakao.maps.Polyline({
+      path: drawingPath, strokeColor: document.getElementById('drawColor').value,
+      strokeWeight: 3, strokeOpacity: .9, strokeStyle: 'solid'
+    });
+    drawingOverlay.setMap(map);
+  } else if (drawingPath.length >= 3 && drawMode === 'polygon') {
+    const color = document.getElementById('drawColor').value;
+    drawingOverlay = new kakao.maps.Polygon({
+      path: [...drawingPath], strokeColor: color,
+      strokeWeight: 2, strokeOpacity: .9, fillColor: color, fillOpacity: .25
+    });
+    drawingOverlay.setMap(map);
+  }
+}
+
+function clearDrawingDots() {
+  drawingDots.forEach(o => o.setMap(null));
+  drawingDots = [];
 }
 
 function placeMyMarker(latLng) {
@@ -1007,34 +1067,6 @@ function openEditMarkerModal(id) {
   // 모달 제목 변경
   document.querySelector('#markerModal .modal-title').textContent = '📍 마커 수정';
   document.getElementById('markerModal').style.display = 'flex';
-}
-
-async function saveMarker() {
-  const title = document.getElementById('markerTitle').value.trim();
-  if (!title) { alert('제목을 입력해주세요'); return; }
-  if (!window._sb) { alert('로그인이 필요해요'); closeMarkerModal(); return; }
-  const { data: { session } } = await window._sb.auth.getSession();
-  if (!session) { alert('로그인이 필요해요'); closeMarkerModal(); return; }
-
-  if (editingMarkerId) {
-    // 수정
-    await window._sb.from('markers').update({
-      title, content: document.getElementById('markerContent').value, color: markerColor
-    }).eq('id', editingMarkerId).eq('user_id', session.user.id); // 본인만 수정 가능
-    editingMarkerId = null;
-  } else {
-    // 신규
-    if (!pendingMarkerLatLng) return;
-    await window._sb.from('markers').insert({
-      user_id: session.user.id, title,
-      content: document.getElementById('markerContent').value,
-      color: markerColor,
-      lat: pendingMarkerLatLng.getLat(), lng: pendingMarkerLatLng.getLng()
-    });
-  }
-
-  closeMarkerModal();
-  loadMyMarkers();
 }
 
 /* ════════════════════════════════
