@@ -204,12 +204,75 @@ header{display:flex;align-items:center;gap:12px;padding:0 16px;height:48px;borde
 
     <!-- 그리기 도구 -->
     <div class="draw-toolbar" id="drawToolbar">
-      <button class="draw-btn" id="btnSelect" onclick="setDrawMode('select')" title="선택/이동">🖱 선택</button>
-      <button class="draw-btn" id="btnMarker" onclick="setDrawMode('marker')" title="마커 찍기">📍 마커</button>
-      <button class="draw-btn" id="btnLine" onclick="setDrawMode('line')" title="선 그리기">📏 선</button>
-      <button class="draw-btn" id="btnPolygon" onclick="setDrawMode('polygon')" title="영역 그리기">⬡ 영역</button>
-      <input type="color" id="drawColor" value="#ef4444" title="색상 선택" style="width:28px;height:28px;padding:2px;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:transparent;">
-      <button class="draw-btn" onclick="clearMyDrawings()" title="내 그리기 전체 삭제" style="color:#f87171;">🗑 삭제</button>
+      <button class="draw-btn active" id="btnSelect" onclick="setDrawMode('select')">🖱 선택</button>
+      <button class="draw-btn" id="btnMarker" onclick="setDrawMode('marker')">📍 마커</button>
+      <button class="draw-btn" id="btnLine" onclick="setDrawMode('line')">📏 선</button>
+      <button class="draw-btn" id="btnPolygon" onclick="setDrawMode('polygon')">⬡ 영역</button>
+      <button class="draw-btn" id="btnOverlay" onclick="openOverlayPanel()">🖼 이미지</button>
+      <input type="color" id="drawColor" value="#ef4444" style="width:28px;height:28px;padding:2px;border-radius:6px;border:1px solid var(--border);cursor:pointer;background:transparent;">
+      <button class="draw-btn" onclick="clearMyDrawings()" style="color:#f87171;">🗑 삭제</button>
+    </div>
+
+    <!-- 마커 메모 모달 -->
+    <div id="markerModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:340px;max-width:90vw;">
+        <div style="font-size:15px;font-weight:500;margin-bottom:16px;">📍 마커 정보 입력</div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">제목 *</label>
+          <input id="markerTitle" type="text" placeholder="예: 운정3지구 예정지" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;outline:none;">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">내용</label>
+          <textarea id="markerContent" placeholder="메모, 분석 내용 등 자유롭게 입력" rows="4" style="width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:inherit;font-size:13px;outline:none;resize:vertical;"></textarea>
+        </div>
+        <div style="margin-bottom:16px;">
+          <label style="font-size:12px;color:var(--text2);display:block;margin-bottom:4px;">마커 색상</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <div onclick="selectMarkerColor('#ef4444',this)" style="width:22px;height:22px;border-radius:50%;background:#ef4444;cursor:pointer;border:2px solid #fff;" class="mcolor active"></div>
+            <div onclick="selectMarkerColor('#f97316',this)" style="width:22px;height:22px;border-radius:50%;background:#f97316;cursor:pointer;border:2px solid transparent;" class="mcolor"></div>
+            <div onclick="selectMarkerColor('#facc15',this)" style="width:22px;height:22px;border-radius:50%;background:#facc15;cursor:pointer;border:2px solid transparent;" class="mcolor"></div>
+            <div onclick="selectMarkerColor('#4ade80',this)" style="width:22px;height:22px;border-radius:50%;background:#4ade80;cursor:pointer;border:2px solid transparent;" class="mcolor"></div>
+            <div onclick="selectMarkerColor('#60a5fa',this)" style="width:22px;height:22px;border-radius:50%;background:#60a5fa;cursor:pointer;border:2px solid transparent;" class="mcolor"></div>
+            <div onclick="selectMarkerColor('#a78bfa',this)" style="width:22px;height:22px;border-radius:50%;background:#a78bfa;cursor:pointer;border:2px solid transparent;" class="mcolor"></div>
+            <div onclick="selectMarkerColor('#f472b6',this)" style="width:22px;height:22px;border-radius:50%;background:#f472b6;cursor:pointer;border:2px solid transparent;" class="mcolor"></div>
+            <div onclick="selectMarkerColor('#94a3b8',this)" style="width:22px;height:22px;border-radius:50%;background:#94a3b8;cursor:pointer;border:2px solid transparent;" class="mcolor"></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="closeMarkerModal()" style="padding:8px 16px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;font-family:inherit;font-size:13px;">취소</button>
+          <button onclick="saveMarker()" style="padding:8px 16px;border-radius:8px;border:none;background:var(--accent);color:#0f1117;cursor:pointer;font-family:inherit;font-size:13px;font-weight:500;">저장</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 이미지 오버레이 패널 -->
+    <div id="overlayPanel" style="display:none;position:absolute;top:60px;right:10px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;width:260px;z-index:30;">
+      <div style="font-size:13px;font-weight:500;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+        🖼 이미지 오버레이
+        <span onclick="closeOverlayPanel()" style="cursor:pointer;color:var(--text3);font-size:16px;">✕</span>
+      </div>
+      <div id="overlayDropZone" onclick="document.getElementById('overlayFileInput').click()"
+        ondragover="event.preventDefault();this.style.borderColor='var(--accent)'"
+        ondragleave="this.style.borderColor='var(--border)'"
+        ondrop="handleOverlayDrop(event)"
+        style="border:2px dashed var(--border);border-radius:8px;padding:16px;text-align:center;cursor:pointer;margin-bottom:10px;font-size:12px;color:var(--text3);">
+        클릭 또는 드래그<br>PNG/JPG 이미지
+      </div>
+      <input type="file" id="overlayFileInput" accept="image/*" style="display:none" onchange="handleOverlayFile(this.files[0])">
+      <div style="margin-bottom:8px;">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px;">이름</label>
+        <input id="overlayTitle" type="text" placeholder="오버레이 이름" style="width:100%;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;font-family:inherit;outline:none;">
+      </div>
+      <div style="margin-bottom:8px;">
+        <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px;">투명도: <span id="opacityVal">70%</span></label>
+        <input type="range" id="overlayOpacity" min="10" max="100" value="70" oninput="document.getElementById('opacityVal').textContent=this.value+'%'" style="width:100%;">
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">이미지 선택 후 지도에서 좌측하단→우측상단 순서로 클릭해 위치를 지정하세요</div>
+      <div id="overlayStatus" style="font-size:11px;color:var(--accent);margin-bottom:8px;display:none;"></div>
+      <button onclick="saveOverlay()" id="overlaySubmitBtn" disabled style="width:100%;padding:8px;border-radius:8px;border:none;background:var(--accent);color:#0f1117;cursor:pointer;font-family:inherit;font-size:12px;font-weight:500;opacity:.5;">위치 지정 후 저장</button>
+
+      <!-- 내 오버레이 목록 -->
+      <div id="myOverlayList" style="margin-top:12px;"></div>
     </div>
 
     <!-- 지적편집도 버튼 -->
@@ -315,6 +378,7 @@ async function checkAuthState() {
         document.getElementById('adminBtn').style.display = 'inline-block';
       }
       window._sb = sb;
+      loadMyMarkers();
     }
   } catch(e) { console.log('auth 확인 실패:', e); }
 }
@@ -599,7 +663,7 @@ function setDrawMode(mode) {
 
   if (mode === 'marker') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
-      placeMyMarker(e.latLng);
+      openMarkerModal(e.latLng);
     });
   } else if (mode === 'line') {
     drawClickListener = kakao.maps.event.addListener(map, 'click', e => {
@@ -712,6 +776,265 @@ function clearMyDrawings() {
   myDrawings.forEach(o => { if(o && o.setMap) o.setMap(null); });
   myDrawings = [];
   closeMyInfo();
+}
+
+/* ════════════════════════════════
+   마커 메모 (Supabase 저장)
+════════════════════════════════ */
+let pendingMarkerLatLng = null;
+let markerColor = '#ef4444';
+let myMarkerOverlays = [];
+
+function selectMarkerColor(color, el) {
+  markerColor = color;
+  document.querySelectorAll('.mcolor').forEach(e => e.style.border = '2px solid transparent');
+  el.style.border = '2px solid #fff';
+}
+
+function openMarkerModal(latLng) {
+  pendingMarkerLatLng = latLng;
+  document.getElementById('markerTitle').value = '';
+  document.getElementById('markerContent').value = '';
+  const modal = document.getElementById('markerModal');
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('markerTitle').focus(), 100);
+}
+
+function closeMarkerModal() {
+  document.getElementById('markerModal').style.display = 'none';
+  pendingMarkerLatLng = null;
+}
+
+async function saveMarker() {
+  const title = document.getElementById('markerTitle').value.trim();
+  if (!title) { alert('제목을 입력해주세요'); return; }
+  if (!pendingMarkerLatLng) return;
+  if (!window._sb) { alert('로그인이 필요해요'); closeMarkerModal(); return; }
+
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) { alert('로그인이 필요해요'); closeMarkerModal(); return; }
+
+  const { data, error } = await window._sb.from('markers').insert({
+    user_id: session.user.id,
+    title,
+    content: document.getElementById('markerContent').value,
+    color: markerColor,
+    lat: pendingMarkerLatLng.getLat(),
+    lng: pendingMarkerLatLng.getLng()
+  }).select().single();
+
+  if (error) { alert('저장 실패: ' + error.message); return; }
+
+  renderMyMarker(data);
+  closeMarkerModal();
+}
+
+function renderMyMarker(m) {
+  const pos = new kakao.maps.LatLng(m.lat, m.lng);
+  const el = document.createElement('div');
+  el.innerHTML = `<div style="width:24px;height:24px;border-radius:50% 50% 50% 0;background:${m.color};border:2px solid #fff;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,0.4);cursor:pointer;"></div>`;
+  el.style.cssText = 'transform:translate(-12px,-24px)';
+  const ov = new kakao.maps.CustomOverlay({ position: pos, content: el, zIndex: 5 });
+  ov.setMap(map);
+  ov._markerId = m.id;
+  el.addEventListener('click', () => showMarkerInfo(m, ov));
+  myMarkerOverlays.push(ov);
+}
+
+let markerInfoWin = null;
+function showMarkerInfo(m, ov) {
+  if (markerInfoWin) { markerInfoWin.setMap(null); markerInfoWin = null; }
+  const pos = new kakao.maps.LatLng(m.lat, m.lng);
+  const el = document.createElement('div');
+  el.style.cssText = 'background:#fff;border-radius:10px;padding:12px 14px;min-width:200px;max-width:260px;box-shadow:0 3px 12px rgba(0,0,0,0.2);font-family:Noto Sans KR,sans-serif;';
+  el.innerHTML = `
+    <div style="font-size:13px;font-weight:700;color:#111;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">
+      <span><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${m.color};margin-right:6px;"></span>${m.title}</span>
+      <span onclick="closeMarkerInfo()" style="cursor:pointer;color:#999;font-size:15px;margin-left:8px;">✕</span>
+    </div>
+    ${m.content ? `<div style="font-size:12px;color:#444;line-height:1.7;margin-bottom:8px;white-space:pre-wrap;">${m.content}</div>` : ''}
+    <div style="font-size:10px;color:#999;margin-bottom:8px;">${new Date(m.created_at).toLocaleString('ko')}</div>
+    <div style="display:flex;gap:6px;">
+      <button onclick="editMarker('${m.id}')" style="flex:1;padding:5px;border-radius:6px;border:1px solid #ddd;background:#f9f9f9;font-size:11px;cursor:pointer;">✏ 수정</button>
+      <button onclick="deleteMarker('${m.id}')" style="flex:1;padding:5px;border-radius:6px;border:1px solid #f87171;background:#fff5f5;color:#f87171;font-size:11px;cursor:pointer;">🗑 삭제</button>
+    </div>`;
+  markerInfoWin = new kakao.maps.CustomOverlay({ position: pos, content: el, zIndex: 10, yAnchor: 1.3 });
+  markerInfoWin.setMap(map);
+}
+
+function closeMarkerInfo() {
+  if (markerInfoWin) { markerInfoWin.setMap(null); markerInfoWin = null; }
+}
+
+async function deleteMarker(id) {
+  if (!confirm('마커를 삭제할까요?')) return;
+  await window._sb.from('markers').delete().eq('id', id);
+  const idx = myMarkerOverlays.findIndex(o => o._markerId === id);
+  if (idx >= 0) { myMarkerOverlays[idx].setMap(null); myMarkerOverlays.splice(idx, 1); }
+  closeMarkerInfo();
+}
+
+async function editMarker(id) {
+  const title = prompt('새 제목:');
+  if (!title) return;
+  const content = prompt('새 내용:');
+  await window._sb.from('markers').update({ title, content }).eq('id', id);
+  closeMarkerInfo();
+  loadMyMarkers();
+}
+
+async function loadMyMarkers() {
+  if (!window._sb) return;
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) return;
+  myMarkerOverlays.forEach(o => o.setMap(null));
+  myMarkerOverlays = [];
+  const { data } = await window._sb.from('markers').select('*').eq('user_id', session.user.id);
+  data?.forEach(m => renderMyMarker(m));
+}
+
+/* ════════════════════════════════
+   이미지 오버레이
+════════════════════════════════ */
+let overlayFile = null;
+let overlayPoints = [];
+let overlayClickListener = null;
+let overlayPreviewList = [];
+
+function openOverlayPanel() {
+  document.getElementById('overlayPanel').style.display = 'block';
+  loadMyOverlays();
+}
+function closeOverlayPanel() {
+  document.getElementById('overlayPanel').style.display = 'none';
+  cancelOverlayPick();
+}
+
+function handleOverlayDrop(e) {
+  e.preventDefault();
+  handleOverlayFile(e.dataTransfer.files[0]);
+}
+
+function handleOverlayFile(file) {
+  if (!file) return;
+  overlayFile = file;
+  document.getElementById('overlayDropZone').innerHTML = `<div style="font-size:12px;color:var(--accent)">📎 ${file.name}</div>`;
+  document.getElementById('overlayTitle').value = file.name.replace(/\.[^.]+$/, '');
+  startOverlayPick();
+}
+
+function startOverlayPick() {
+  overlayPoints = [];
+  updateOverlayStatus('지도에서 좌측하단(SW) 지점을 클릭하세요 (1/2)');
+  map.setDraggable(false);
+  overlayClickListener = kakao.maps.event.addListener(map, 'click', e => {
+    overlayPoints.push(e.latLng);
+    if (overlayPoints.length === 1) {
+      updateOverlayStatus('우측상단(NE) 지점을 클릭하세요 (2/2)');
+      // SW 임시 마커
+      const dot = document.createElement('div');
+      dot.style.cssText = 'width:10px;height:10px;border-radius:50%;background:#4ade80;border:2px solid #fff;';
+      new kakao.maps.CustomOverlay({ position: e.latLng, content: dot, zIndex: 20 }).setMap(map);
+    } else if (overlayPoints.length === 2) {
+      cancelOverlayPick();
+      document.getElementById('overlaySubmitBtn').disabled = false;
+      document.getElementById('overlaySubmitBtn').style.opacity = '1';
+      updateOverlayStatus('✅ 위치 지정 완료! 저장 버튼을 누르세요');
+    }
+  });
+}
+
+function cancelOverlayPick() {
+  if (overlayClickListener) {
+    kakao.maps.event.removeListener(map, 'click', overlayClickListener);
+    overlayClickListener = null;
+  }
+  map.setDraggable(true);
+}
+
+function updateOverlayStatus(msg) {
+  const el = document.getElementById('overlayStatus');
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+async function saveOverlay() {
+  if (!overlayFile || overlayPoints.length < 2) { alert('이미지와 위치를 먼저 지정해주세요'); return; }
+  if (!window._sb) { alert('로그인이 필요해요'); return; }
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) { alert('로그인이 필요해요'); return; }
+
+  updateOverlayStatus('업로드 중...');
+  const ext = overlayFile.name.split('.').pop();
+  const path = `${session.user.id}/${Date.now()}.${ext}`;
+  const { error: upErr } = await window._sb.storage.from('overlay-images').upload(path, overlayFile);
+  if (upErr) { alert('업로드 실패: ' + upErr.message); return; }
+
+  const { data: urlData } = window._sb.storage.from('overlay-images').getPublicUrl(path);
+
+  const sw = overlayPoints[0], ne = overlayPoints[1];
+  const { error: dbErr } = await window._sb.from('image_overlays').insert({
+    user_id: session.user.id,
+    title: document.getElementById('overlayTitle').value || '이미지 오버레이',
+    storage_path: path,
+    sw_lat: sw.getLat(), sw_lng: sw.getLng(),
+    ne_lat: ne.getLat(), ne_lng: ne.getLng(),
+    opacity: document.getElementById('overlayOpacity').value / 100
+  });
+  if (dbErr) { alert('저장 실패: ' + dbErr.message); return; }
+
+  renderOverlayOnMap({ title: document.getElementById('overlayTitle').value, url: urlData.publicUrl,
+    sw_lat: sw.getLat(), sw_lng: sw.getLng(), ne_lat: ne.getLat(), ne_lng: ne.getLng(),
+    opacity: document.getElementById('overlayOpacity').value / 100 });
+
+  updateOverlayStatus('✅ 저장 완료!');
+  overlayFile = null; overlayPoints = [];
+  document.getElementById('overlaySubmitBtn').disabled = true;
+  document.getElementById('overlaySubmitBtn').style.opacity = '.5';
+  loadMyOverlays();
+}
+
+function renderOverlayOnMap(o) {
+  const sw = new kakao.maps.LatLng(o.sw_lat, o.sw_lng);
+  const ne = new kakao.maps.LatLng(o.ne_lat, o.ne_lng);
+  // 지도상 픽셀 위치 계산해서 이미지 오버레이
+  const bounds = new kakao.maps.LatLngBounds(sw, ne);
+  const img = document.createElement('img');
+  img.src = o.url;
+  img.style.cssText = `width:100%;height:100%;opacity:${o.opacity};pointer-events:none;`;
+  // CustomOverlay로 bounds에 맞게 렌더
+  const proj = map.getProjection();
+  const swPt = proj.pointFromCoords(sw);
+  const nePt = proj.pointFromCoords(ne);
+  const w = Math.abs(nePt.x - swPt.x);
+  const h = Math.abs(nePt.y - swPt.y);
+  const wrap = document.createElement('div');
+  wrap.style.cssText = `width:${w}px;height:${h}px;position:absolute;`;
+  wrap.appendChild(img);
+  const center = new kakao.maps.LatLng((o.sw_lat + o.ne_lat) / 2, (o.sw_lng + o.ne_lng) / 2);
+  const ov = new kakao.maps.CustomOverlay({ position: center, content: wrap, zIndex: 1 });
+  ov.setMap(map);
+  overlayPreviewList.push(ov);
+}
+
+async function loadMyOverlays() {
+  if (!window._sb) return;
+  const { data: { session } } = await window._sb.auth.getSession();
+  if (!session) return;
+  const { data } = await window._sb.from('image_overlays').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false });
+  const listEl = document.getElementById('myOverlayList');
+  if (!data?.length) { listEl.innerHTML = '<div style="font-size:11px;color:var(--text3);text-align:center;padding:8px;">저장된 오버레이 없음</div>'; return; }
+  listEl.innerHTML = data.map(o => `
+    <div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--border);">
+      <span style="font-size:11px;color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${o.title}</span>
+      <button onclick="deleteOverlay('${o.id}')" style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid #f87171;background:transparent;color:#f87171;cursor:pointer;">삭제</button>
+    </div>`).join('');
+}
+
+async function deleteOverlay(id) {
+  if (!confirm('오버레이를 삭제할까요?')) return;
+  await window._sb.from('image_overlays').delete().eq('id', id);
+  loadMyOverlays();
 }
 
 /* ════════════════════════════════
