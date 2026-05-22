@@ -382,18 +382,22 @@ async function init() {
 }
 
 /* ════════════════════════════════
+   Supabase 전역 초기화
+════════════════════════════════ */
+const { createClient } = supabase;
+window._sb = createClient(
+  'https://caldnkfhqeblusscaabs.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbGRua2ZocWVibHVzc2NhYWJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzIzMzUsImV4cCI6MjA5NDkwODMzNX0.z1n5-tqXz5fjy48faxE7nC09zdQKz4_f2mcE6wF8Zls'
+);
+
+/* ════════════════════════════════
    로그인 상태 확인
 ════════════════════════════════ */
 async function checkAuthState() {
   try {
-    const { createClient } = supabase;
-    const sb = createClient(
-      'https://caldnkfhqeblusscaabs.supabase.co',
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNhbGRua2ZocWVibHVzc2NhYWJzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkzMzIzMzUsImV4cCI6MjA5NDkwODMzNX0.z1n5-tqXz5fjy48faxE7nC09zdQKz4_f2mcE6wF8Zls'
-    );
-    const { data: { session } } = await sb.auth.getSession();
+    const { data: { session } } = await window._sb.auth.getSession();
     if (session) {
-      const { data: profile } = await sb.from('profiles').select('name,role').eq('id', session.user.id).single();
+      const { data: profile } = await window._sb.from('profiles').select('name,role').eq('id', session.user.id).single();
       document.getElementById('authBtns').style.display = 'none';
       const userBtns = document.getElementById('userBtns');
       userBtns.style.display = 'flex';
@@ -401,8 +405,8 @@ async function checkAuthState() {
       if (profile?.role === 'admin') {
         document.getElementById('adminBtn').style.display = 'inline-block';
       }
-      window._sb = sb;
       loadMyMarkers();
+      loadMyOverlays();
     }
   } catch(e) { console.log('auth 확인 실패:', e); }
 }
