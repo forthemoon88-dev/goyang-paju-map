@@ -582,8 +582,15 @@ function setDrawMode(mode) {
   const btn = document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1));
   if (btn) btn.classList.add('active');
 
-  if (drawClickListener) { kakao.maps.event.removeListener(map, 'click', drawClickListener); drawClickListener = null; }
-  if (drawRightClickListener) { kakao.maps.event.removeListener(map, 'rightclick', drawRightClickListener); drawRightClickListener = null; }
+  // 기존 리스너 완전 제거
+  if (drawClickListener) {
+    kakao.maps.event.removeListener(drawClickListener);
+    drawClickListener = null;
+  }
+  if (drawRightClickListener) {
+    kakao.maps.event.removeListener(drawRightClickListener);
+    drawRightClickListener = null;
+  }
   clearDrawingDots();
   if (drawingOverlay) { drawingOverlay.setMap(null); drawingOverlay = null; }
   drawingPath = [];
@@ -591,8 +598,7 @@ function setDrawMode(mode) {
   if (mode === 'select') {
     map.setDraggable(true);
     map.setCursor('');
-    // 선택 모드: 아무 그리기 이벤트 없음 - 자유 이동
-    return;
+    return; // 선택 모드: 어떤 그리기도 없음
   }
   map.setDraggable(false);
   map.setCursor('crosshair');
@@ -607,7 +613,7 @@ function setDrawMode(mode) {
       addDrawingDot(e.latLng, idx);
       updateDrawingOverlay();
     });
-    drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', e => {
+    drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', () => {
       if (drawingPath.length >= 2) finalizeLine();
     });
 
@@ -618,7 +624,7 @@ function setDrawMode(mode) {
       addDrawingDot(e.latLng, idx);
       updateDrawingOverlay();
     });
-    drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', e => {
+    drawRightClickListener = kakao.maps.event.addListener(map, 'rightclick', () => {
       if (drawingPath.length >= 3) finalizePolygon();
     });
   }
