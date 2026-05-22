@@ -1052,7 +1052,6 @@ function toggleMarkerVisible(id) {
 }
 
 // 마커 수정 모달
-let editingMarkerId = null;
 function openEditMarkerModal(id) {
   const m = window._markerData?.[id];
   if (!m) return;
@@ -1132,42 +1131,6 @@ function updateOverlayStatus(msg) {
   const el = document.getElementById('overlayStatus');
   el.textContent = msg;
   el.style.display = msg ? 'block' : 'none';
-}
-
-async function saveOverlay() {
-  if (!overlayFile || overlayPoints.length < 2) { alert('이미지와 위치를 먼저 지정해주세요'); return; }
-  if (!window._sb) { alert('로그인이 필요해요'); return; }
-  const { data: { session } } = await window._sb.auth.getSession();
-  if (!session) { alert('로그인이 필요해요'); return; }
-
-  updateOverlayStatus('업로드 중...');
-  const ext = overlayFile.name.split('.').pop();
-  const path = `${session.user.id}/${Date.now()}.${ext}`;
-  const { error: upErr } = await window._sb.storage.from('overlay-images').upload(path, overlayFile);
-  if (upErr) { alert('업로드 실패: ' + upErr.message); return; }
-
-  const { data: urlData } = window._sb.storage.from('overlay-images').getPublicUrl(path);
-
-  const sw = overlayPoints[0], ne = overlayPoints[1];
-  const { error: dbErr } = await window._sb.from('image_overlays').insert({
-    user_id: session.user.id,
-    title: document.getElementById('overlayTitle').value || '이미지 오버레이',
-    storage_path: path,
-    sw_lat: sw.getLat(), sw_lng: sw.getLng(),
-    ne_lat: ne.getLat(), ne_lng: ne.getLng(),
-    opacity: document.getElementById('overlayOpacity').value / 100
-  });
-  if (dbErr) { alert('저장 실패: ' + dbErr.message); return; }
-
-  renderOverlayOnMap({ title: document.getElementById('overlayTitle').value, url: urlData.publicUrl,
-    sw_lat: sw.getLat(), sw_lng: sw.getLng(), ne_lat: ne.getLat(), ne_lng: ne.getLng(),
-    opacity: document.getElementById('overlayOpacity').value / 100 });
-
-  updateOverlayStatus('✅ 저장 완료!');
-  overlayFile = null; overlayPoints = [];
-  document.getElementById('overlaySubmitBtn').disabled = true;
-  document.getElementById('overlaySubmitBtn').style.opacity = '.5';
-  loadMyOverlays();
 }
 
 function renderOverlayOnMap(o) {
